@@ -6,8 +6,6 @@ FrameWrench gives you *explicit, frame-level control* over every WebSocket inter
 
 > ⚠️ **AI Disclosure:** This project was developed with the assistance of generative AI. All code, architecture decisions, and documentation were reviewed and refined as part of the development process.
 
----
-
 ## Why FrameWrench?
 
 ### The Gap in the .NET Ecosystem
@@ -36,7 +34,6 @@ As of early 2025 there is no maintained, open-source WebSocket *client* library 
 
 FrameWrench fills this gap: a clean, minimal, fully RFC 6455-compliant *client* library that treats frames as first-class citizens.
 
----
 
 ## Features
 
@@ -54,7 +51,6 @@ FrameWrench fills this gap: a clean, minimal, fully RFC 6455-compliant *client* 
 | **Logger-agnostic** | No `ILogger` or logging package dependency - use NLog, Serilog, `Trace`, or your own wrappers around `FrameReceived` / exceptions |
 | **Target frameworks** | `net462`, `net48`, `netstandard2.0` |
 
----
 
 ## Installation
 
@@ -99,7 +95,6 @@ dotnet pack -c Release
 
 Then consume the resulting `.nupkg` via a [local NuGet feed](https://learn.microsoft.com/en-us/nuget/hosting-packages/local-feeds) or `dotnet add package` with a `--source` path.
 
----
 
 ## Building
 
@@ -126,7 +121,6 @@ dotnet run --project samples/FrameWrench.Example --framework net48
 
 Open `src/FrameWrench.slnx` in Visual Studio 2022 17.10+. Older versions can open the individual `.csproj` files directly.
 
----
 
 ## Quick Start
 
@@ -149,7 +143,6 @@ Console.WriteLine(message.GetText()); // "Hello, World!"
 await client.CloseAsync();
 ```
 
----
 
 ## API Reference
 
@@ -256,7 +249,6 @@ await client.CloseAsync(
     ct: cancellationToken);
 ```
 
----
 
 ## Configuration - FrameWrenchOptions
 
@@ -286,7 +278,6 @@ var options = new FrameWrenchOptions
 };
 ```
 
----
 
 ## WebSocketFrame
 
@@ -311,7 +302,6 @@ var text = frame.GetTextPayload();
 frame.GetCloseData(out WebSocketCloseStatus? status, out string reason);
 ```
 
----
 
 ## Fragmentation Guide
 
@@ -364,7 +354,6 @@ var msg = await client.ReceiveMessageAsync(ct);
 Console.WriteLine(msg.GetText());
 ```
 
----
 
 ## Ping/Pong Guide
 
@@ -415,7 +404,6 @@ var opts = new FrameWrenchOptions
 // If the server doesn't respond within PingTimeout, CloseAsync is called automatically.
 ```
 
----
 
 ## Thread Safety
 
@@ -425,7 +413,6 @@ var opts = new FrameWrenchOptions
 | **Receiving frames** | A single background pump reads frames from the wire. `ReceiveFrameAsync`, `GetFrameStream`, and `ReceiveMessageAsync` all read from an in-memory channel fed by the pump. Multiple concurrent calls to `ReceiveFrameAsync` are allowed but each frame is delivered to exactly one caller. If several tasks call `ReceiveMessageAsync` concurrently, logical message ordering is your responsibility. |
 | **FrameReceived event** | Fires on the pump thread. Keep handlers short and non-blocking. |
 
----
 
 ## Error Handling
 
@@ -460,13 +447,6 @@ catch (FrameWrenchException ex)
 
 Prefer **`await client.DisposeAsync()`** (or `await using`) over **`Dispose()`** when a `SynchronizationContext` may be present (for example UI or legacy ASP.NET), because synchronous dispose can block while sending the close frame.
 
----
-
-## Observability
-
-The library does not accept or emit logs through `Microsoft.Extensions.Logging`. Instrument your app as you prefer: handle `FrameReceived`, catch `FrameWrenchException` types from `ConnectAsync` / send / receive, and inspect `client.State` when diagnosing disconnects.
-
----
 
 ## Target Frameworks & Compatibility
 
@@ -488,7 +468,6 @@ Minimum NuGet dependencies (all from Microsoft):
 | `Microsoft.Bcl.AsyncInterfaces` | `IAsyncEnumerable<T>`, `IAsyncDisposable` on down-level targets |
 | `System.Threading.Tasks.Extensions` | `ValueTask` extensions |
 
----
 
 ## Project Structure
 
@@ -528,7 +507,6 @@ FrameWrench/
         └── Program.cs                   # Full demo: connect, text, ping, fragment, close
 ```
 
----
 
 ## Running the Example
 
@@ -540,7 +518,6 @@ dotnet run --project samples/FrameWrench.Example --framework net48
 dotnet run --project samples/FrameWrench.Example --framework net48 -- ws://localhost:9000/ws
 ```
 
----
 
 ## Contributing
 
@@ -550,15 +527,12 @@ dotnet run --project samples/FrameWrench.Example --framework net48 -- ws://local
 4. Follow the existing XML-doc comment style.
 5. **CI and Codecov:** pushes and PRs to `master` run `.github/workflows/ci.yml` (build, test, coverage). Maintainers should add a **`CODECOV_TOKEN`** repository secret from [Codecov](https://codecov.io) so coverage uploads succeed; forks may rely on Codecov’s tokenless rules for public repositories when the upstream org allows it.
 
----
 
 ## License
 
 MIT - see `LICENSE` for details.
 
----
 
 ## Acknowledgements
 
 - [RFC 6455 - The WebSocket Protocol](https://datatracker.ietf.org/doc/html/rfc6455)
-- Developed with assistance from [Anthropic Claude](https://claude.ai)
