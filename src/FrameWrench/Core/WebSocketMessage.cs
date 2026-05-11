@@ -1,3 +1,5 @@
+using FrameWrench.Internal;
+
 namespace FrameWrench.Core;
 
 /// <summary>
@@ -24,13 +26,13 @@ public sealed class WebSocketMessage
 
     /// <summary>Initialises a new <see cref="WebSocketMessage"/>.</summary>
     internal WebSocketMessage(
-        FrameOpCode                 messageType,
-        ReadOnlyMemory<byte>        payload,
+        FrameOpCode messageType,
+        ReadOnlyMemory<byte> payload,
         IReadOnlyList<WebSocketFrame> frames)
     {
         MessageType = messageType;
-        Payload     = payload;
-        Frames      = frames;
+        Payload = payload;
+        Frames = frames;
     }
 
     /// <summary>
@@ -38,7 +40,7 @@ public sealed class WebSocketMessage
     /// <see cref="FrameOpCode.Text"/> messages.
     /// </summary>
     public string GetText() =>
-        System.Text.Encoding.UTF8.GetString(Payload.ToArray());
+        Utf8StringUtil.GetString(Payload);
 
     /// <inheritdoc/>
     public override string ToString() =>

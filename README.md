@@ -361,7 +361,7 @@ Console.WriteLine(msg.GetText());
 
 ### How correlation works
 
-`PingAsync` generates (or uses your provided) payload, stores it keyed by its Base64 representation, sends the Ping frame, and awaits a `TaskCompletionSource`. The internal receive pump detects incoming Pong frames, looks up the key, and completes the TCS. If no Pong arrives within the timeout, `(false, elapsed)` is returned.
+`PingAsync` generates (or uses your provided) payload, registers a waiter in a FIFO queue keyed by the Base64 representation of that payload, sends the Ping frame, and awaits a `TaskCompletionSource`. The receive pump matches each Pong’s echoed application data to that key and completes the oldest outstanding waiter, so concurrent pings with the same payload still correlate correctly. If no Pong arrives within the timeout, `(false, elapsed)` is returned.
 
 ```csharp
 // The payload is echoed verbatim in the Pong - use it as a correlation key
@@ -425,7 +425,6 @@ All FrameWrench exceptions derive from `FrameWrenchException`:
 | `WebSocketHandshakeException` | HTTP upgrade failed, non-101 status, bad `Sec-WebSocket-Accept` |
 | `WebSocketProtocolException` | RFC 6455 violation: reserved opcode, masked server frame, oversized control frame, fragmented control frame |
 | `WebSocketStateException` | Operation attempted in wrong state (e.g., send after close) |
-| `PingTimeoutException` | Informational - `PingAsync` returns `(false, elapsed)` instead of throwing this; reserved for strict mode |
 | `EndOfStreamException` | Server closed the TCP connection mid-frame |
 
 ```csharp

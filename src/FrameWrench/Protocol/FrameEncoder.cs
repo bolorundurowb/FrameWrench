@@ -39,10 +39,10 @@ internal static class FrameEncoder
     /// </param>
     /// <param name="ct">Cancellation token.</param>
     public static async Task WriteAsync(
-        Stream            stream,
-        WebSocketFrame    frame,
-        bool              masked = true,
-        CancellationToken ct     = default)
+        Stream stream,
+        WebSocketFrame frame,
+        bool masked = true,
+        CancellationToken ct = default)
     {
         var payloadLen = frame.Payload.Length;
 
@@ -56,36 +56,36 @@ internal static class FrameEncoder
 
         byte byte0 = (byte)(
             (frame.IsFinal ? 0x80 : 0x00) |
-            (frame.Rsv1   ? 0x40 : 0x00) |
-            (frame.Rsv2   ? 0x20 : 0x00) |
-            (frame.Rsv3   ? 0x10 : 0x00) |
+            (frame.Rsv1 ? 0x40 : 0x00) |
+            (frame.Rsv2 ? 0x20 : 0x00) |
+            (frame.Rsv3 ? 0x10 : 0x00) |
             ((byte)frame.OpCode & 0x0F));
 
         byte maskBit = masked ? (byte)0x80 : (byte)0x00;
 
-        int  headerSize;
+        int headerSize;
         byte lenByte;
 
         if (payloadLen <= 125)
         {
             headerSize = 2;
-            lenByte    = (byte)payloadLen;
+            lenByte = (byte)payloadLen;
         }
         else if (payloadLen <= 65535)
         {
             headerSize = 4;
-            lenByte    = 126;
+            lenByte = 126;
         }
         else
         {
             headerSize = 10;
-            lenByte    = 127;
+            lenByte = 127;
         }
 
         if (masked) headerSize += 4;
 
-        int  totalSize  = headerSize + payloadLen;
-        var  rentedBuf  = ArrayPool<byte>.Shared.Rent(totalSize);
+        int totalSize = headerSize + payloadLen;
+        var rentedBuf = ArrayPool<byte>.Shared.Rent(totalSize);
         try
         {
             int pos = 0;
@@ -108,7 +108,7 @@ internal static class FrameEncoder
             if (masked)
             {
                 var maskKey = GenerateMaskKey();
-                rentedBuf[pos]     = maskKey[0];
+                rentedBuf[pos] = maskKey[0];
                 rentedBuf[pos + 1] = maskKey[1];
                 rentedBuf[pos + 2] = maskKey[2];
                 rentedBuf[pos + 3] = maskKey[3];
@@ -137,12 +137,9 @@ internal static class FrameEncoder
     private static byte[] GenerateMaskKey()
     {
         var key = new byte[4];
-#if NETFRAMEWORK || NETSTANDARD2_0
         using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
             rng.GetBytes(key);
-#else
-        System.Security.Cryptography.RandomNumberGenerator.Fill(key);
-#endif
+
         return key;
     }
 }

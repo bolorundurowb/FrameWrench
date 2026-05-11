@@ -1,7 +1,8 @@
-using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Security.Authentication;
 using System.Threading.Channels;
 using FrameWrench.Core;
@@ -48,7 +49,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     private readonly FrameWrenchOptions _options;
 
     private TcpClient? _tcp;
-    private Stream?    _stream;
+    private Stream? _stream;
     private volatile WebSocketState _state = WebSocketState.None;
 
     private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
@@ -61,13 +62,17 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         });
 
     private Task? _pumpTask;
-    private CancellationTokenSource _pumpCts = new CancellationTokenSource();
+    private CancellationTokenSource? _pumpCts;
 
-    private readonly ConcurrentDictionary<string, PingWaiter> _pendingPings =
-        new ConcurrentDictionary<string, PingWaiter>();
+    /// <summary>
+    /// Maps Pong payload (Base64 of echoed application data) to FIFO waiters so concurrent
+    /// <see cref="PingAsync"/> calls with identical payloads still correlate correctly.
+    /// </summary>
+    private readonly Dictionary<string, List<PingWaiter>> _pendingPings = new(StringComparer.Ordinal);
+    private readonly object _pendingPingLock = new();
 
-    private Task?                   _autoPingTask;
-    private CancellationTokenSource _autoPingCts = new CancellationTokenSource();
+    private Task? _autoPingTask;
+    private CancellationTokenSource? _autoPingCts;
 
     /// <summary>The current connection state.</summary>
     public WebSocketState State => _state;
@@ -111,7 +116,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         _state = WebSocketState.Connecting;
 
         bool useTls = scheme == "wss";
-        int  port   = uri.IsDefaultPort ? (useTls ? 443 : 80) : uri.Port;
+        int port = uri.IsDefaultPort ? (useTls ? 443 : 80) : uri.Port;
 
         _tcp = new TcpClient { NoDelay = true };
 
@@ -120,12 +125,8 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 
         try
         {
-#if NETFRAMEWORK || NETSTANDARD2_0
             var connectTask = _tcp.ConnectAsync(uri.Host, port);
             await TaskUtils.WaitAsync(connectTask, connectCts.Token).ConfigureAwait(false);
-#else
-            await _tcp.ConnectAsync(uri.Host, port, connectCts.Token).ConfigureAwait(false);
-#endif
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -142,7 +143,6 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
                 leaveInnerStreamOpen: false,
                 _options.RemoteCertificateValidationCallback);
 
-#if NETFRAMEWORK || NETSTANDARD2_0
             await sslStream.AuthenticateAsClientAsync(
                 uri.Host,
                 clientCertificates: null,
@@ -150,14 +150,6 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
                     ? SslProtocols.Tls12
                     : _options.SslProtocols,
                 checkCertificateRevocation: false).ConfigureAwait(false);
-#else
-            var authOptions = new SslClientAuthenticationOptions
-            {
-                TargetHost          = uri.Host,
-                EnabledSslProtocols = _options.SslProtocols,
-            };
-            await sslStream.AuthenticateAsClientAsync(authOptions, ct).ConfigureAwait(false);
-#endif
             _stream = sslStream;
         }
         else
@@ -165,8 +157,8 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
             _stream = netStream;
         }
 
-        var (_, keyBase64)    = HandshakeHelper.GenerateKey();
-        var expectedAccept    = HandshakeHelper.ComputeAcceptValue(keyBase64);
+        var (_, keyBase64) = HandshakeHelper.GenerateKey();
+        var expectedAccept = HandshakeHelper.ComputeAcceptValue(keyBase64);
 
         var extraHeaders = new Dictionary<string, string>(
             _options.ExtraHeaders, StringComparer.OrdinalIgnoreCase);
@@ -182,12 +174,12 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 
         _state = WebSocketState.Open;
 
-        _pumpCts  = new CancellationTokenSource();
+        _pumpCts = new CancellationTokenSource();
         _pumpTask = Task.Run(() => ReceivePumpAsync(_pumpCts.Token), CancellationToken.None);
 
         if (_options.AutoPing)
         {
-            _autoPingCts  = new CancellationTokenSource();
+            _autoPingCts = new CancellationTokenSource();
             _autoPingTask = Task.Run(
                 () => AutoPingLoopAsync(_autoPingCts.Token), CancellationToken.None);
         }
@@ -204,10 +196,10 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     /// </param>
     /// <param name="ct">Cancellation token.</param>
     public async Task SendFrameAsync(
-        FrameOpCode          opCode,
+        FrameOpCode opCode,
         ReadOnlyMemory<byte> payload,
-        bool                 isFinal = true,
-        CancellationToken    ct      = default)
+        bool isFinal = true,
+        CancellationToken ct = default)
     {
         EnsureOpen();
         await SendRawFrameAsync(new WebSocketFrame(opCode, isFinal, payload), ct)
@@ -243,10 +235,14 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     /// <c>(true, roundtrip)</c> if the Pong arrived in time;
     /// <c>(false, elapsed)</c> on timeout.
     /// </returns>
+    /// <remarks>
+    /// Multiple concurrent calls with the same payload are queued in FIFO order and matched
+    /// to Pongs in the same order (the echoed application data is the correlation key).
+    /// </remarks>
     public async Task<(bool pongReceived, TimeSpan roundtrip)> PingAsync(
         ReadOnlyMemory<byte> payload = default,
-        TimeSpan             timeout = default,
-        CancellationToken    ct      = default)
+        TimeSpan timeout = default,
+        CancellationToken ct = default)
     {
         EnsureOpen();
 
@@ -256,12 +252,8 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         if (payload.IsEmpty)
         {
             pingPayload = new byte[4];
-#if NETFRAMEWORK || NETSTANDARD2_0
             using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
                 rng.GetBytes(pingPayload);
-#else
-            System.Security.Cryptography.RandomNumberGenerator.Fill(pingPayload);
-#endif
         }
         else
         {
@@ -273,7 +265,16 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 
         var key = Convert.ToBase64String(pingPayload);
         var waiter = new PingWaiter();
-        _pendingPings[key] = waiter;
+        lock (_pendingPingLock)
+        {
+            if (!_pendingPings.TryGetValue(key, out var list))
+            {
+                list = new List<PingWaiter>();
+                _pendingPings[key] = list;
+            }
+
+            list.Add(waiter);
+        }
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -295,7 +296,15 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         }
         finally
         {
-            _pendingPings.TryRemove(key, out _);
+            lock (_pendingPingLock)
+            {
+                if (_pendingPings.TryGetValue(key, out var list))
+                {
+                    list.Remove(waiter);
+                    if (list.Count == 0)
+                        _pendingPings.Remove(key);
+                }
+            }
         }
     }
 
@@ -355,9 +364,9 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     /// <returns>A <see cref="WebSocketMessage"/> containing the full payload.</returns>
     public async Task<WebSocketMessage> ReceiveMessageAsync(CancellationToken ct = default)
     {
-        var      fragments   = new List<WebSocketFrame>();
+        var fragments = new List<WebSocketFrame>();
         FrameOpCode? msgType = null;
-        int      totalLen    = 0;
+        int totalLen = 0;
 
         while (true)
         {
@@ -395,7 +404,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
             return new WebSocketMessage(msgType!.Value, fragments[0].Payload, fragments);
 
         var combined = new byte[totalLen];
-        int offset   = 0;
+        int offset = 0;
         foreach (var f in fragments)
         {
             f.Payload.Span.CopyTo(combined.AsSpan(offset));
@@ -414,8 +423,8 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     /// <param name="ct">Cancellation token.</param>
     public async Task CloseAsync(
         WebSocketCloseStatus status = WebSocketCloseStatus.NormalClosure,
-        string?              reason = null,
-        CancellationToken    ct     = default)
+        string? reason = null,
+        CancellationToken ct = default)
     {
         if (_state is not (WebSocketState.Open or WebSocketState.CloseReceived))
             return;
@@ -541,9 +550,27 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     private void CompletePingWaiter(WebSocketFrame pong)
     {
         if (pong.Payload.IsEmpty) return;
-        var key = Convert.ToBase64String(pong.Payload.ToArray());
-        if (_pendingPings.TryRemove(key, out var waiter))
+        var key = PingPayloadToCorrelationKey(pong.Payload);
+        lock (_pendingPingLock)
+        {
+            if (!_pendingPings.TryGetValue(key, out var list) || list.Count == 0)
+                return;
+
+            var waiter = list[0];
+            list.RemoveAt(0);
+            if (list.Count == 0)
+                _pendingPings.Remove(key);
+
             waiter.SetResult();
+        }
+    }
+
+    private static string PingPayloadToCorrelationKey(ReadOnlyMemory<byte> payload)
+    {
+        if (MemoryMarshal.TryGetArray(payload, out var seg) && seg.Array is not null)
+            return Convert.ToBase64String(seg.Array, seg.Offset, seg.Count);
+
+        return Convert.ToBase64String(payload.ToArray());
     }
 
     private async Task TrySendPongAsync(ReadOnlyMemory<byte> pingPayload, CancellationToken ct)
@@ -634,13 +661,13 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 
     private void CleanUp()
     {
-        _autoPingCts.Cancel();
-        _pumpCts.Cancel();
+        try { _autoPingCts?.Cancel(); } catch { }
+        try { _pumpCts?.Cancel(); } catch { }
 
-        try { _stream?.Close(); }  catch { }
-        try { _tcp?.Close(); }     catch { }
+        try { _stream?.Close(); } catch { }
+        try { _tcp?.Close(); } catch { }
         try { _stream?.Dispose(); } catch { }
-        try { _tcp?.Dispose(); }   catch { }
+        try { _tcp?.Dispose(); } catch { }
 
         _frameChannel.Writer.TryComplete();
 

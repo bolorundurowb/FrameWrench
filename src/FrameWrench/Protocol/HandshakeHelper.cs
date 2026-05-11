@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Security.Cryptography;
 using System.Text;
 using FrameWrench.Core;
@@ -35,12 +36,9 @@ internal static class HandshakeHelper
     public static (byte[] keyBytes, string keyBase64) GenerateKey()
     {
         var bytes = new byte[16];
-#if NETFRAMEWORK || NETSTANDARD2_0
         using (var rng = RandomNumberGenerator.Create())
             rng.GetBytes(bytes);
-#else
-        RandomNumberGenerator.Fill(bytes);
-#endif
+
         return (bytes, Convert.ToBase64String(bytes));
     }
 
@@ -51,13 +49,9 @@ internal static class HandshakeHelper
     public static string ComputeAcceptValue(string keyBase64)
     {
         var combined = keyBase64 + Rfc6455Guid;
-        var bytes    = Encoding.ASCII.GetBytes(combined);
-#if NETFRAMEWORK || NETSTANDARD2_0
+        var bytes = Encoding.ASCII.GetBytes(combined);
         using var sha1 = SHA1.Create();
         var hash = sha1.ComputeHash(bytes);
-#else
-        var hash = SHA1.HashData(bytes);
-#endif
         return Convert.ToBase64String(hash);
     }
 
@@ -71,12 +65,12 @@ internal static class HandshakeHelper
     /// Each entry is written as <c>key: value\r\n</c>.
     /// </param>
     public static byte[] BuildRequest(
-        Uri                                  uri,
-        string                               keyBase64,
+        Uri uri,
+        string keyBase64,
         IReadOnlyDictionary<string, string>? extraHeaders = null)
     {
-        var host   = uri.IsDefaultPort ? uri.Host : $"{uri.Host}:{uri.Port}";
-        var path   = string.IsNullOrEmpty(uri.PathAndQuery) ? "/" : uri.PathAndQuery;
+        var host = uri.IsDefaultPort ? uri.Host : $"{uri.Host}:{uri.Port}";
+        var path = string.IsNullOrEmpty(uri.PathAndQuery) ? "/" : uri.PathAndQuery;
 
         var sb = new StringBuilder();
         sb.Append($"GET {path} HTTP/1.1\r\n");
@@ -109,13 +103,13 @@ internal static class HandshakeHelper
     /// Thrown if the response is not a valid 101 upgrade or the accept value is wrong.
     /// </exception>
     public static async Task ValidateResponseAsync(
-        Stream            stream,
-        string            expectedAccept,
+        Stream stream,
+        string expectedAccept,
         CancellationToken ct)
     {
         var headerBytes = await ReadHttpHeadersAsync(stream, ct).ConfigureAwait(false);
-        var response    = Encoding.ASCII.GetString(headerBytes);
-        var lines       = response.Split(new[] { "\r\n" }, StringSplitOptions.None);
+        var response = Encoding.ASCII.GetString(headerBytes);
+        var lines = response.Split(new[] { "\r\n" }, StringSplitOptions.None);
 
         if (lines.Length == 0)
             throw new WebSocketHandshakeException("Empty response from the server.", statusLine: null);
@@ -133,10 +127,10 @@ internal static class HandshakeHelper
         var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         for (int i = 1; i < lines.Length; i++)
         {
-            var line  = lines[i];
+            var line = lines[i];
             var colon = line.IndexOf(':');
             if (colon < 0) continue;
-            var key   = line.Substring(0, colon).Trim();
+            var key = line.Substring(0, colon).Trim();
             var value = line.Substring(colon + 1).Trim();
             headers[key] = value;
         }
@@ -170,42 +164,67 @@ internal static class HandshakeHelper
     /// that terminator.  Does not read any bytes beyond the header block.
     /// </summary>
     private static async Task<byte[]> ReadHttpHeadersAsync(
-        Stream            stream,
+        Stream stream,
         CancellationToken ct)
     {
-        var buffer = new List<byte>(512);
-        var window = new byte[4];
+        const int maxHeaders = 16 * 1024;
+        const int readChunk = 1024;
 
-        var singleByte = new byte[1];
+        var pool = ArrayPool<byte>.Shared;
+        var buf = pool.Rent(maxHeaders + readChunk);
 
-        while (true)
+        try
         {
-            ct.ThrowIfCancellationRequested();
+            var total = 0;
+            while (total <= maxHeaders)
+            {
+                ct.ThrowIfCancellationRequested();
 
-            int n = await stream
-                .ReadAsync(singleByte, 0, 1, ct)
-                .ConfigureAwait(false);
+                var room = buf.Length - total;
+                if (room == 0)
+                    throw new WebSocketHandshakeException(
+                        "HTTP response headers exceeded the 16 KiB size limit.");
 
-            if (n == 0)
-                throw new WebSocketHandshakeException(
-                    "The connection was closed before the HTTP handshake completed.");
+                var toRead = Math.Min(readChunk, room);
+                var n = await stream.ReadAsync(buf, total, toRead, ct).ConfigureAwait(false);
+                if (n == 0)
+                    throw new WebSocketHandshakeException(
+                        "The connection was closed before the HTTP handshake completed.");
 
-            buffer.Add(singleByte[0]);
+                total += n;
 
-            window[0] = window[1];
-            window[1] = window[2];
-            window[2] = window[3];
-            window[3] = singleByte[0];
+                if (total > maxHeaders)
+                    throw new WebSocketHandshakeException(
+                        "HTTP response headers exceeded the 16 KiB size limit.");
 
-            if (window[0] == '\r' && window[1] == '\n' &&
-                window[2] == '\r' && window[3] == '\n')
-                break;
+                var end = FindHeaderBlockEnd(buf, total);
+                if (end >= 0)
+                {
+                    var result = new byte[end];
+                    Buffer.BlockCopy(buf, 0, result, 0, end);
+                    return result;
+                }
+            }
 
-            if (buffer.Count > 16 * 1024)
-                throw new WebSocketHandshakeException(
-                    "HTTP response headers exceeded the 16 KiB size limit.");
+            throw new WebSocketHandshakeException(
+                "HTTP response headers exceeded the 16 KiB size limit.");
+        }
+        finally
+        {
+            pool.Return(buf);
+        }
+    }
+
+    /// <summary>Returns byte length of the header block including <c>\r\n\r\n</c>, or <c>-1</c>.</summary>
+    private static int FindHeaderBlockEnd(byte[] buffer, int length)
+    {
+        for (var i = 0; i + 3 < length; i++)
+        {
+            if (buffer[i] == '\r' && buffer[i + 1] == '\n' &&
+                buffer[i + 2] == '\r' && buffer[i + 3] == '\n')
+                return i + 4;
         }
 
-        return buffer.ToArray();
+        return -1;
     }
 }

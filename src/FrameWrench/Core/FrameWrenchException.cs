@@ -70,19 +70,3 @@ public class WebSocketStateException : FrameWrenchException
         CurrentState = state;
     }
 }
-
-/// <summary>
-/// Raised when a ping times out without receiving a corresponding pong.
-/// </summary>
-public class PingTimeoutException : FrameWrenchException
-{
-    /// <summary>The timeout duration that elapsed.</summary>
-    public TimeSpan Timeout { get; }
-
-    /// <summary>Initialises the exception.</summary>
-    public PingTimeoutException(TimeSpan timeout)
-        : base($"A matching Pong was not received within {timeout.TotalMilliseconds:0} ms.")
-    {
-        Timeout = timeout;
-    }
-}

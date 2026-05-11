@@ -8,14 +8,14 @@ namespace FrameWrench.Tests;
 
 public sealed class IntegrationTests : IAsyncLifetime
 {
-    private HttpListener?            _listener;
-    private CancellationTokenSource  _serverCts = new CancellationTokenSource();
-    private Task?                    _serverTask;
-    private int                      _port;
+    private HttpListener? _listener;
+    private CancellationTokenSource _serverCts = new CancellationTokenSource();
+    private Task? _serverTask;
+    private int _port;
 
     public async Task InitializeAsync()
     {
-        _port     = FreeTcpPort();
+        _port = FreeTcpPort();
         _listener = new HttpListener();
         _listener.Prefixes.Add($"http://localhost:{_port}/");
         _listener.Start();
@@ -49,8 +49,8 @@ public sealed class IntegrationTests : IAsyncLifetime
             _ = Task.Run(async () =>
             {
                 var wsCtx = await ctx.AcceptWebSocketAsync(null);
-                var ws    = wsCtx.WebSocket;
-                var buf   = new byte[64 * 1024];
+                var ws = wsCtx.WebSocket;
+                var buf = new byte[64 * 1024];
 
                 while (ws.State == System.Net.WebSockets.WebSocketState.Open && !ct.IsCancellationRequested)
                 {
@@ -97,7 +97,7 @@ public sealed class IntegrationTests : IAsyncLifetime
         new FrameWrenchClient(new FrameWrenchOptions
         {
             ConnectTimeout = TimeSpan.FromSeconds(10),
-            PingTimeout    = TimeSpan.FromSeconds(5),
+            PingTimeout = TimeSpan.FromSeconds(5),
         });
 
     [Fact]
@@ -195,8 +195,8 @@ public sealed class IntegrationTests : IAsyncLifetime
 
         await client.SendTextAsync("stream test");
 
-        using var cts    = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        var       frames = new List<WebSocketFrame>();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var frames = new List<WebSocketFrame>();
 
         await foreach (var frame in client.GetFrameStream(cts.Token))
         {
@@ -216,15 +216,21 @@ public sealed class IntegrationTests : IAsyncLifetime
     [Fact]
     public async Task FrameReceived_EventFires_ForEachFrame()
     {
-        await using var client    = NewClient();
-        var             gotFrames = new List<WebSocketFrame>();
-        client.FrameReceived += (_, f) => gotFrames.Add(f);
+        await using var client = NewClient();
+        var gotNonControl = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        client.FrameReceived += (_, f) =>
+        {
+            if (!f.IsControl && !gotNonControl.Task.IsCompleted)
+                gotNonControl.TrySetResult(true);
+        };
 
         await client.ConnectAsync(ServerUri);
         await client.SendTextAsync("event test");
-        await Task.Delay(300);
 
-        gotFrames.ShouldNotBeEmpty();
+        var timeout = Task.Delay(TimeSpan.FromSeconds(10));
+        var winner = await Task.WhenAny(gotNonControl.Task, timeout);
+        winner.ShouldBe(gotNonControl.Task, "Expected FrameReceived to deliver a non-control frame.");
 
         await client.CloseAsync();
     }

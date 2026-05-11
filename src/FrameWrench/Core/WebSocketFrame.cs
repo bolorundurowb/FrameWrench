@@ -1,4 +1,5 @@
 using System.Text;
+using FrameWrench.Internal;
 
 namespace FrameWrench.Core;
 
@@ -32,19 +33,19 @@ public sealed class WebSocketFrame
     /// <param name="rsv2">RSV2 extension bit (default <c>false</c>).</param>
     /// <param name="rsv3">RSV3 extension bit (default <c>false</c>).</param>
     public WebSocketFrame(
-        FrameOpCode          opCode,
-        bool                 isFinal,
+        FrameOpCode opCode,
+        bool isFinal,
         ReadOnlyMemory<byte> payload,
-        bool                 rsv1 = false,
-        bool                 rsv2 = false,
-        bool                 rsv3 = false)
+        bool rsv1 = false,
+        bool rsv2 = false,
+        bool rsv3 = false)
     {
-        OpCode  = opCode;
+        OpCode = opCode;
         IsFinal = isFinal;
         Payload = payload;
-        Rsv1    = rsv1;
-        Rsv2    = rsv2;
-        Rsv3    = rsv3;
+        Rsv1 = rsv1;
+        Rsv2 = rsv2;
+        Rsv3 = rsv3;
     }
 
     /// <summary>The opcode that classifies this frame.</summary>
@@ -79,7 +80,7 @@ public sealed class WebSocketFrame
     /// Decodes the payload as a UTF-8 string. Intended for <see cref="FrameOpCode.Text"/> frames.
     /// </summary>
     public string GetTextPayload() =>
-        Encoding.UTF8.GetString(Payload.ToArray());
+        Utf8StringUtil.GetString(Payload);
 
     /// <summary>
     /// For a <see cref="FrameOpCode.Close"/> frame, extracts the optional status code
@@ -104,13 +105,13 @@ public sealed class WebSocketFrame
         if (span.Length < 2)
         {
             statusCode = null;
-            reason     = string.Empty;
+            reason = string.Empty;
             return;
         }
 
         statusCode = (WebSocketCloseStatus)((span[0] << 8) | span[1]);
-        reason     = span.Length > 2
-            ? Encoding.UTF8.GetString(Payload.Slice(2).ToArray())
+        reason = span.Length > 2
+            ? Utf8StringUtil.GetString(Payload.Slice(2))
             : string.Empty;
     }
 
@@ -169,16 +170,16 @@ public sealed class WebSocketFrame
     /// </param>
     public static WebSocketFrame Close(
         WebSocketCloseStatus status = WebSocketCloseStatus.NormalClosure,
-        string?              reason = null)
+        string? reason = null)
     {
         var reasonBytes = reason is { Length: > 0 }
             ? Encoding.UTF8.GetBytes(reason)
             : Array.Empty<byte>();
 
         var payload = new byte[2 + reasonBytes.Length];
-        var code    = (ushort)status;
-        payload[0]  = (byte)(code >> 8);
-        payload[1]  = (byte)(code & 0xFF);
+        var code = (ushort)status;
+        payload[0] = (byte)(code >> 8);
+        payload[1] = (byte)(code & 0xFF);
         if (reasonBytes.Length > 0)
             reasonBytes.CopyTo(payload, 2);
 
