@@ -8,17 +8,13 @@ public static class Program
 {
     public static async Task Main(string[] args)
     {
-        var culture = new CultureInfo("en-NG");
-        CultureInfo.DefaultThreadCurrentCulture   = culture;
-        CultureInfo.DefaultThreadCurrentUICulture = culture;
-
         var uri = args.Length > 0
             ? new Uri(args[0])
             : new Uri("wss://echo.websocket.org");
 
         Console.ForegroundColor = ConsoleColor.Cyan;
         Console.WriteLine("╔══════════════════════════════════════╗");
-        Console.WriteLine("║   FrameWrench - Console example    ║");
+        Console.WriteLine("║    FrameWrench - Console example     ║");
         Console.WriteLine("╚══════════════════════════════════════╝");
         Console.ResetColor();
         Console.WriteLine($"Target URI: {uri}");
@@ -26,9 +22,9 @@ public static class Program
 
         var options = new FrameWrenchOptions
         {
-            ConnectTimeout  = TimeSpan.FromSeconds(15),
-            PingTimeout     = TimeSpan.FromSeconds(10),
-            AutoPing        = false,
+            ConnectTimeout = TimeSpan.FromSeconds(15),
+            PingTimeout = TimeSpan.FromSeconds(10),
+            AutoPing = false,
         };
 
         await using var client = new FrameWrenchClient(options);
@@ -72,15 +68,15 @@ public static class Program
         var part2Bytes = System.Text.Encoding.UTF8.GetBytes("Hello!");
 
         Console.WriteLine("  Sending frame 1/2: Text opcode, FIN=false (\"Fragmented \")");
-        await client.SendFrameAsync(FrameOpCode.Text,         part1Bytes, isFinal: false);
+        await client.SendFrameAsync(FrameOpCode.Text, part1Bytes, isFinal: false);
 
         Console.WriteLine("  Sending frame 2/2: Continuation opcode, FIN=true (\"Hello!\")");
         await client.SendFrameAsync(FrameOpCode.Continuation, part2Bytes, isFinal: true);
 
         Console.WriteLine("  Receiving via GetFrameStream (one frame at a time):");
 
-        using var cts       = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var       collected = new List<WebSocketFrame>();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var collected = new List<WebSocketFrame>();
 
         await foreach (var frame in client.GetFrameStream(cts.Token))
         {

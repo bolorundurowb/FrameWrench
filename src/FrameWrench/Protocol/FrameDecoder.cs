@@ -37,9 +37,9 @@ internal static class FrameDecoder
     /// Thrown if the connection closes unexpectedly while reading a frame.
     /// </exception>
     public static async Task<WebSocketFrame> ReadFrameAsync(
-        Stream            stream,
-        int               maxPayloadBytes = 64 * 1024 * 1024,
-        CancellationToken ct              = default)
+        Stream stream,
+        int maxPayloadBytes = 64 * 1024 * 1024,
+        CancellationToken ct = default)
     {
         var header = new byte[2];
         await ReadExactAsync(stream, header, 0, 2, ct).ConfigureAwait(false);
@@ -47,19 +47,27 @@ internal static class FrameDecoder
         byte byte0 = header[0];
         byte byte1 = header[1];
 
-        bool fin   = (byte0 & 0x80) != 0;
-        bool rsv1  = (byte0 & 0x40) != 0;
-        bool rsv2  = (byte0 & 0x20) != 0;
-        bool rsv3  = (byte0 & 0x10) != 0;
-        var  opCode = (FrameOpCode)(byte0 & 0x0F);
+        bool fin = (byte0 & 0x80) != 0;
+        bool rsv1 = (byte0 & 0x40) != 0;
+        bool rsv2 = (byte0 & 0x20) != 0;
+        bool rsv3 = (byte0 & 0x10) != 0;
+        var opCode = (FrameOpCode)(byte0 & 0x0F);
 
         bool masked = (byte1 & 0x80) != 0;
-        int  len7   = byte1 & 0x7F;
+        int len7 = byte1 & 0x7F;
 
         if (masked)
             throw new WebSocketProtocolException(
                 "Received a masked frame from the server. " +
                 "Per RFC 6455 §5.1, servers must not mask frames sent to a client.");
+
+        // RFC 6455 §5.2: RSV1–RSV3 MUST be 0 unless defined by a negotiated extension.
+        // FrameWrench does not negotiate any per-message extensions, so any non-zero RSV
+        // bit is a protocol error.
+        if (rsv1 || rsv2 || rsv3)
+            throw new WebSocketProtocolException(
+                $"Received frame with non-zero RSV bits (RSV1={rsv1}, RSV2={rsv2}, RSV3={rsv3}). " +
+                "RFC 6455 §5.2 requires RSV bits to be 0 unless a negotiated extension defines their use.");
 
         ValidateOpCode(opCode, fin);
 
@@ -111,8 +119,8 @@ internal static class FrameDecoder
     /// minimise allocations on the hot path.
     /// </summary>
     private static async Task<byte[]> ReadPayloadAsync(
-        Stream            stream,
-        int               length,
+        Stream stream,
+        int length,
         CancellationToken ct)
     {
         if (length == 0) return Array.Empty<byte>();
@@ -136,10 +144,10 @@ internal static class FrameDecoder
     /// at <paramref name="offset"/>.  Throws <see cref="EndOfStreamException"/> on EOF.
     /// </summary>
     private static async Task ReadExactAsync(
-        Stream            stream,
-        byte[]            buffer,
-        int               offset,
-        int               count,
+        Stream stream,
+        byte[] buffer,
+        int offset,
+        int count,
         CancellationToken ct)
     {
         int totalRead = 0;

@@ -143,6 +143,9 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
                 leaveInnerStreamOpen: false,
                 _options.RemoteCertificateValidationCallback);
 
+            // These targets (net462, net48, netstandard2.0) require an explicit protocol
+            // set — SslProtocols.None is not accepted by the old overload.  Fall back to
+            // TLS 1.2, which all three runtimes support.
             await sslStream.AuthenticateAsClientAsync(
                 uri.Host,
                 clientCertificates: null,
@@ -493,7 +496,8 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     {
         try
         {
-            while (!ct.IsCancellationRequested && _state == WebSocketState.Open)
+            while (!ct.IsCancellationRequested &&
+                   (_state == WebSocketState.Open || _state == WebSocketState.CloseSent))
             {
                 WebSocketFrame frame;
                 try

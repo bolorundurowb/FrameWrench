@@ -10,17 +10,17 @@ public class FrameDecoderTests
 {
     private static byte[] BuildServerFrame(
         FrameOpCode opCode,
-        bool        fin,
-        byte[]      payload,
-        bool        masked = false,
-        bool        rsv1   = false,
-        bool        rsv2   = false,
-        bool        rsv3   = false)
+        bool fin,
+        byte[] payload,
+        bool masked = false,
+        bool rsv1 = false,
+        bool rsv2 = false,
+        bool rsv3 = false)
     {
         using var ms = new MemoryStream();
 
         byte byte0 =
-            (byte)((fin  ? 0x80 : 0) |
+            (byte)((fin ? 0x80 : 0) |
                    (rsv1 ? 0x40 : 0) |
                    (rsv2 ? 0x20 : 0) |
                    (rsv3 ? 0x10 : 0) |
@@ -64,9 +64,9 @@ public class FrameDecoderTests
     [InlineData(FrameOpCode.Pong)]
     public async Task Decode_AllValidOpcodes_ParsesCorrectly(FrameOpCode opCode)
     {
-        bool fin     = opCode is FrameOpCode.Close or FrameOpCode.Ping or FrameOpCode.Pong;
-        var  payload = new byte[] { 0x42, 0x43 };
-        var  frame   = await Decode(BuildServerFrame(opCode, fin, payload));
+        bool fin = opCode is FrameOpCode.Close or FrameOpCode.Ping or FrameOpCode.Pong;
+        var payload = new byte[] { 0x42, 0x43 };
+        var frame = await Decode(BuildServerFrame(opCode, fin, payload));
 
         frame.OpCode.ShouldBe(opCode);
         frame.IsFinal.ShouldBe(fin);
@@ -125,9 +125,9 @@ public class FrameDecoderTests
     [Fact]
     public async Task CloseFrame_ExtractsStatusAndReason()
     {
-        const string reason      = "test close";
-        var          reasonBytes = System.Text.Encoding.UTF8.GetBytes(reason);
-        var          payload     = new byte[2 + reasonBytes.Length];
+        const string reason = "test close";
+        var reasonBytes = System.Text.Encoding.UTF8.GetBytes(reason);
+        var payload = new byte[2 + reasonBytes.Length];
         BinaryPrimitives.WriteUInt16BigEndian(payload, (ushort)WebSocketCloseStatus.GoingAway);
         reasonBytes.CopyTo(payload, 2);
 
@@ -164,7 +164,7 @@ public class FrameDecoderTests
     public async Task ReservedOpCode_Throws_ProtocolException(byte reserved)
     {
         var wire = new byte[] { (byte)(0x80 | reserved), 0x00 };
-        var ex   = await Should.ThrowAsync<WebSocketProtocolException>(
+        var ex = await Should.ThrowAsync<WebSocketProtocolException>(
             () => FrameDecoder.ReadFrameAsync(new MemoryStream(wire)));
         ex.Message.ShouldContain("reserved opcode");
     }
@@ -173,7 +173,7 @@ public class FrameDecoderTests
     public async Task FragmentedControlFrame_Throws_ProtocolException()
     {
         var wire = new byte[] { 0x09, 0x00 };
-        var ex   = await Should.ThrowAsync<WebSocketProtocolException>(
+        var ex = await Should.ThrowAsync<WebSocketProtocolException>(
             () => FrameDecoder.ReadFrameAsync(new MemoryStream(wire)));
         ex.Message.ShouldContain("fragmented");
     }
@@ -206,9 +206,9 @@ public class FrameDecoderTests
     [Fact]
     public async Task TextFrame_GetTextPayload_ReturnsUtf8String()
     {
-        const string msg     = "Hello, FrameWrench!";
-        var          encoded = System.Text.Encoding.UTF8.GetBytes(msg);
-        var          frame   = await Decode(BuildServerFrame(FrameOpCode.Text, true, encoded));
+        const string msg = "Hello, FrameWrench!";
+        var encoded = System.Text.Encoding.UTF8.GetBytes(msg);
+        var frame = await Decode(BuildServerFrame(FrameOpCode.Text, true, encoded));
         frame.GetTextPayload().ShouldBe(msg);
     }
 

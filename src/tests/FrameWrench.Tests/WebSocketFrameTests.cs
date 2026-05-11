@@ -24,7 +24,7 @@ public class WebSocketFrameTests
     [Fact]
     public void Binary_Factory_SetsCorrectFields()
     {
-        var data  = new byte[] { 1, 2, 3 };
+        var data = new byte[] { 1, 2, 3 };
         var frame = WebSocketFrame.Binary(data);
         frame.OpCode.ShouldBe(FrameOpCode.Binary);
         frame.IsFinal.ShouldBeTrue();
@@ -43,7 +43,7 @@ public class WebSocketFrameTests
     public void Ping_Factory_SetsCorrectFields()
     {
         var payload = new byte[] { 0x01, 0x02, 0x03 };
-        var frame   = WebSocketFrame.Ping(payload);
+        var frame = WebSocketFrame.Ping(payload);
         frame.OpCode.ShouldBe(FrameOpCode.Ping);
         frame.IsFinal.ShouldBeTrue();
         frame.IsControl.ShouldBeTrue();

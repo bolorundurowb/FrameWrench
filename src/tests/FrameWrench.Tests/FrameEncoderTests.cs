@@ -16,13 +16,13 @@ public class FrameEncoderTests
     }
 
     [Theory]
-    [InlineData(FrameOpCode.Text,         true,  0x81)]
-    [InlineData(FrameOpCode.Binary,       true,  0x82)]
-    [InlineData(FrameOpCode.Close,        true,  0x88)]
-    [InlineData(FrameOpCode.Ping,         true,  0x89)]
-    [InlineData(FrameOpCode.Pong,         true,  0x8A)]
+    [InlineData(FrameOpCode.Text, true, 0x81)]
+    [InlineData(FrameOpCode.Binary, true, 0x82)]
+    [InlineData(FrameOpCode.Close, true, 0x88)]
+    [InlineData(FrameOpCode.Ping, true, 0x89)]
+    [InlineData(FrameOpCode.Pong, true, 0x8A)]
     [InlineData(FrameOpCode.Continuation, false, 0x00)]
-    [InlineData(FrameOpCode.Text,         false, 0x01)]
+    [InlineData(FrameOpCode.Text, false, 0x01)]
     public async Task HeaderByte0_EncodesFINAndOpcode(FrameOpCode op, bool fin, byte expected)
     {
         var bytes = await EncodeAsync(new WebSocketFrame(op, fin, Array.Empty<byte>()));
@@ -98,12 +98,12 @@ public class FrameEncoderTests
     public async Task MaskedFrame_HasMaskBitSet_AndPayloadIsXoredWithKey()
     {
         var payload = new byte[] { 0x01, 0x02, 0x03, 0x04 };
-        var bytes   = await EncodeAsync(
+        var bytes = await EncodeAsync(
             new WebSocketFrame(FrameOpCode.Text, true, payload), masked: true);
 
         (bytes[1] & 0x80).ShouldBe(0x80, "MASK bit must be set");
 
-        var maskKey    = bytes.AsSpan(2, 4).ToArray();
+        var maskKey = bytes.AsSpan(2, 4).ToArray();
         var rawPayload = bytes.AsSpan(6).ToArray();
         rawPayload.Length.ShouldBe(payload.Length);
 
@@ -126,7 +126,7 @@ public class FrameEncoderTests
     public async Task UnmaskedFrame_MaskBitClear_PayloadVerbatim()
     {
         var payload = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF };
-        var bytes   = await EncodeAsync(
+        var bytes = await EncodeAsync(
             new WebSocketFrame(FrameOpCode.Binary, true, payload), masked: false);
 
         (bytes[1] & 0x80).ShouldBe(0, "MASK bit must be clear");
@@ -137,7 +137,7 @@ public class FrameEncoderTests
     public async Task ControlFrame_PayloadOver125Bytes_Throws()
     {
         var frame = new WebSocketFrame(FrameOpCode.Ping, true, new byte[126]);
-        var ex    = await Should.ThrowAsync<WebSocketProtocolException>(
+        var ex = await Should.ThrowAsync<WebSocketProtocolException>(
             async () => await EncodeAsync(frame));
         ex.Message.ShouldContain("125");
     }
@@ -146,7 +146,7 @@ public class FrameEncoderTests
     public async Task ControlFrame_FragmentedFINFalse_Throws()
     {
         var frame = new WebSocketFrame(FrameOpCode.Ping, isFinal: false, Array.Empty<byte>());
-        var ex    = await Should.ThrowAsync<WebSocketProtocolException>(
+        var ex = await Should.ThrowAsync<WebSocketProtocolException>(
             async () => await EncodeAsync(frame));
         ex.Message.ShouldContain("FIN");
     }

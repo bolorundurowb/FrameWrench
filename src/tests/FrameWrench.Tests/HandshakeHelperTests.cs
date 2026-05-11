@@ -34,7 +34,7 @@ public class HandshakeHelperTests
     public void BuildRequest_ContainsMandatoryHeaders()
     {
         var (_, key) = HandshakeHelper.GenerateKey();
-        var text     = System.Text.Encoding.ASCII.GetString(
+        var text = System.Text.Encoding.ASCII.GetString(
             HandshakeHelper.BuildRequest(new Uri("ws://example.com/chat"), key));
 
         text.ShouldContain("GET /chat HTTP/1.1");
@@ -50,8 +50,8 @@ public class HandshakeHelperTests
     public void BuildRequest_IncludesExtraHeaders()
     {
         var (_, key) = HandshakeHelper.GenerateKey();
-        var extra    = new Dictionary<string, string> { ["Authorization"] = "Bearer token" };
-        var text     = System.Text.Encoding.ASCII.GetString(
+        var extra = new Dictionary<string, string> { ["Authorization"] = "Bearer token" };
+        var text = System.Text.Encoding.ASCII.GetString(
             HandshakeHelper.BuildRequest(new Uri("ws://example.com/"), key, extra));
 
         text.ShouldContain("Authorization: Bearer token");
@@ -61,7 +61,7 @@ public class HandshakeHelperTests
     public void BuildRequest_DefaultPort_OmittedFromHostHeader()
     {
         var (_, key) = HandshakeHelper.GenerateKey();
-        var text     = System.Text.Encoding.ASCII.GetString(
+        var text = System.Text.Encoding.ASCII.GetString(
             HandshakeHelper.BuildRequest(new Uri("ws://example.com/"), key));
 
         text.ShouldContain("Host: example.com\r\n");
@@ -71,7 +71,7 @@ public class HandshakeHelperTests
     public void BuildRequest_NonDefaultPort_IncludedInHostHeader()
     {
         var (_, key) = HandshakeHelper.GenerateKey();
-        var text     = System.Text.Encoding.ASCII.GetString(
+        var text = System.Text.Encoding.ASCII.GetString(
             HandshakeHelper.BuildRequest(new Uri("ws://example.com:9000/"), key));
 
         text.ShouldContain("Host: example.com:9000\r\n");
