@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Security.Authentication;
 using System.Threading.Channels;
 using FrameWrench.Core;
+using FrameWrench.Internal;
 using FrameWrench.Protocol;
 
 namespace FrameWrench;
@@ -43,6 +44,14 @@ namespace FrameWrench;
 /// <strong>Automatic Ping/Pong:</strong> Disabled by default.  Enable via
 /// <see cref="FrameWrenchOptions.AutoPing"/>.
 /// </para>
+/// <para>
+/// <strong>UTF-8 (RFC 6455 §8.1):</strong> Complete Text messages from the server are validated
+/// as well-formed UTF-8 before frames are delivered; invalid UTF-8 fails the connection with
+/// <see cref="WebSocketProtocolException"/>. Close frame reason phrases are validated similarly.
+/// Final Text frames sent with <see cref="SendFrameAsync(WebSocketFrame, CancellationToken)"/> are
+/// checked when <see cref="WebSocketFrame.IsFinal"/> is <c>true</c>; fragmented Text you send must
+/// be valid UTF-8 across the whole message (the library does not reassemble outgoing Text for validation).
+/// </para>
 /// </remarks>
 public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 {
@@ -73,6 +82,8 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 
     private Task? _autoPingTask;
     private CancellationTokenSource? _autoPingCts;
+
+    private readonly IncomingUtf8MessageValidator _incomingUtf8Validator = new();
 
     /// <summary>The current connection state.</summary>
     public WebSocketState State => _state;
@@ -175,6 +186,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         await HandshakeHelper.ValidateResponseAsync(_stream, expectedAccept, ct)
             .ConfigureAwait(false);
 
+        _incomingUtf8Validator.Reset();
         _state = WebSocketState.Open;
 
         _pumpCts = new CancellationTokenSource();
@@ -337,10 +349,14 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         {
             return await _frameChannel.Reader.ReadAsync(ct).ConfigureAwait(false);
         }
-        catch (ChannelClosedException)
+        catch (ChannelClosedException ex)
         {
+            if (ex.InnerException is WebSocketProtocolException wsp)
+                throw wsp;
+
             throw new FrameWrenchException(
-                $"The WebSocket connection is closed (state={_state}). No further frames are available.");
+                $"The WebSocket connection is closed (state={_state}). No further frames are available.",
+                ex);
         }
     }
 
@@ -494,6 +510,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 
     private async Task ReceivePumpAsync(CancellationToken ct)
     {
+        Exception? completionError = null;
         try
         {
             while (!ct.IsCancellationRequested &&
@@ -518,30 +535,52 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
                     break;
                 }
 
-                switch (frame.OpCode)
+                try
                 {
-                    case FrameOpCode.Ping:
-                        await TrySendPongAsync(frame.Payload, ct).ConfigureAwait(false);
-                        break;
+                    switch (frame.OpCode)
+                    {
+                        case FrameOpCode.Ping:
+                            await TrySendPongAsync(frame.Payload, ct).ConfigureAwait(false);
+                            PublishFrame(frame);
+                            break;
 
-                    case FrameOpCode.Pong:
-                        CompletePingWaiter(frame);
-                        break;
+                        case FrameOpCode.Pong:
+                            CompletePingWaiter(frame);
+                            PublishFrame(frame);
+                            break;
 
-                    case FrameOpCode.Close:
-                        PublishFrame(frame);
-                        await HandleIncomingCloseAsync(frame, ct).ConfigureAwait(false);
-                        _frameChannel.Writer.TryComplete();
-                        return;
+                        case FrameOpCode.Close:
+                            Utf8Validator.ThrowIfInvalidCloseReason(frame.Payload);
+                            PublishFrame(frame);
+                            await HandleIncomingCloseAsync(frame, ct).ConfigureAwait(false);
+                            return;
+
+                        case FrameOpCode.Text:
+                        case FrameOpCode.Binary:
+                        case FrameOpCode.Continuation:
+                            _incomingUtf8Validator.OnDataFrame(frame);
+                            PublishFrame(frame);
+                            break;
+
+                        default:
+                            PublishFrame(frame);
+                            break;
+                    }
                 }
-
-                PublishFrame(frame);
+                catch (WebSocketProtocolException ex)
+                {
+                    if (_state == WebSocketState.Open)
+                        _state = WebSocketState.Aborted;
+                    completionError = ex;
+                    break;
+                }
             }
         }
         finally
         {
-            _frameChannel.Writer.TryComplete();
-            if (_state == WebSocketState.Open) _state = WebSocketState.Aborted;
+            _frameChannel.Writer.TryComplete(completionError);
+            if (completionError is null && _state == WebSocketState.Open)
+                _state = WebSocketState.Aborted;
         }
     }
 
@@ -643,6 +682,9 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 
     private async Task SendRawFrameAsync(WebSocketFrame frame, CancellationToken ct)
     {
+        if (frame.OpCode == FrameOpCode.Text && frame.IsFinal)
+            Utf8Validator.ThrowIfInvalidUtf8(frame.Payload.Span);
+
         await _sendLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
@@ -665,6 +707,8 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 
     private void CleanUp()
     {
+        _incomingUtf8Validator.Reset();
+
         try { _autoPingCts?.Cancel(); } catch { }
         try { _pumpCts?.Cancel(); } catch { }
 

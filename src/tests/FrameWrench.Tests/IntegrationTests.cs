@@ -245,4 +245,16 @@ public sealed class IntegrationTests : IAsyncLifetime
 
         client.State.ShouldNotBe(global::FrameWrench.Core.WebSocketState.Open);
     }
+
+    [Fact]
+    public async Task SendFrame_TextFinal_InvalidUtf8_ThrowsBeforeWrite()
+    {
+        await using var client = NewClient();
+        await client.ConnectAsync(ServerUri);
+
+        await Should.ThrowAsync<WebSocketProtocolException>(() =>
+            client.SendFrameAsync(FrameOpCode.Text, new byte[] { 0xFF }, isFinal: true));
+
+        await client.CloseAsync();
+    }
 }

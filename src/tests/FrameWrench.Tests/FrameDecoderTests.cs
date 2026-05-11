@@ -82,14 +82,21 @@ public class FrameDecoderTests
         frame.IsFinal.ShouldBe(fin);
     }
 
-    [Fact]
-    public async Task Decode_Rsv1Set_ExposedOnFrame()
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    public async Task Decode_NonZeroRsv_Throws_ProtocolException(bool rsv1, bool rsv2, bool rsv3)
     {
-        var frame = await Decode(
-            BuildServerFrame(FrameOpCode.Text, true, Array.Empty<byte>(), rsv1: true));
-        frame.Rsv1.ShouldBeTrue();
-        frame.Rsv2.ShouldBeFalse();
-        frame.Rsv3.ShouldBeFalse();
+        var ex = await Should.ThrowAsync<WebSocketProtocolException>(
+            () => Decode(BuildServerFrame(
+                FrameOpCode.Text,
+                true,
+                Array.Empty<byte>(),
+                rsv1: rsv1,
+                rsv2: rsv2,
+                rsv3: rsv3)));
+        ex.Message.ShouldContain("RSV");
     }
 
     [Theory]
