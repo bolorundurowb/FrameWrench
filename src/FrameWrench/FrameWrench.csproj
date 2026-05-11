@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net462;net48;netstandard2.0</TargetFrameworks>
+    <LangVersion>13</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <RootNamespace>FrameWrench</RootNamespace>
+    <AssemblyName>FrameWrench</AssemblyName>
+    <Version>1.0.0</Version>
+    <Authors>Winner Timothy Olabamidele</Authors>
+    <Description>Lightweight client-only RFC 6455 WebSocket library with explicit frame-level control. Targets .NET Framework 4.6.2+, .NET Framework 4.8, and .NET Standard 2.0.</Description>
+    <PackageTags>websocket;rfc6455;websocket-client;frames;frame-level;ping;pong;fragmentation;dotnet-framework;netstandard;net462;net48;networking;tcp;tls;wss;low-level;binary-protocol;framewrench</PackageTags>
+    <Optimize>true</Optimize>
+    <DefineConstants Condition="'$(TargetFramework)' == 'net462' OR '$(TargetFramework)' == 'net48'">$(DefineConstants);NETFRAMEWORK</DefineConstants>
+    <!-- NuGet / pack -->
+    <PackageId>FrameWrench</PackageId>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <Copyright>Copyright (c) 2026 Winner Timothy Olabamidele</Copyright>
+    <PackageProjectUrl>https://github.com/PLACEHOLDER/FrameWrench</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/PLACEHOLDER/FrameWrench.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <InternalsVisibleTo Include="FrameWrench.Tests" />
+  </ItemGroup>
+
+  <!-- Core runtime packages require
