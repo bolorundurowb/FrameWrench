@@ -1,5 +1,7 @@
 # FrameWrench
 
+[![Build, Test & Coverage](https://github.com/bolorundurowb/FrameWrench/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/bolorundurowb/FrameWrench/actions/workflows/build-and-test.yml) [![codecov](https://codecov.io/gh/bolorundurowb/FrameWrench/graph/badge.svg?token=poFOTCdIj8)](https://codecov.io/gh/bolorundurowb/FrameWrench) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) ![NuGet Version](https://img.shields.io/nuget/v/FrameWrench)
+
 **A lightweight, client-only RFC 6455 WebSocket library for .NET Framework 4.6.2+, .NET Framework 4.8, and .NET Standard 2.0.**
 
 FrameWrench gives you *explicit, frame-level control* over every WebSocket interaction - including raw Ping/Pong handling, fragmented messages, and direct access to individual frames - while still offering a convenient message-level API when you don't need that control.
@@ -47,7 +49,7 @@ FrameWrench fills this gap: a clean, minimal, fully RFC 6455-compliant *client* 
 | **Async streaming** | `GetFrameStream()` returns `IAsyncEnumerable<WebSocketFrame>` |
 | **TLS support** | Full `wss://` with configurable `SslProtocols` and cert validation callback |
 | **Auto-Ping (opt-in)** | Configurable keepalive via `FrameWrenchOptions.AutoPing` |
-| **Zero WS dependencies** | No external WebSocket NuGet packages; only `System.Buffers`, `System.Memory`, `System.ValueTuple`, `System.Threading.Channels`, and related BCL shims |
+| **Zero WS dependencies** | No WebSocket-specific NuGet packages; only Microsoft BCL shims (`System.Memory`, `System.Threading.Channels`, and others), with **per-target** direct dependencies so **net48** / **netstandard2.0** do not pull packages they do not need |
 | **Logger-agnostic** | No `ILogger` or logging package dependency - use NLog, Serilog, `Trace`, or your own wrappers around `FrameReceived` / exceptions |
 | **Target frameworks** | `net462`, `net48`, `netstandard2.0` |
 
@@ -455,58 +457,6 @@ Prefer **`await client.DisposeAsync()`** (or `await using`) over **`Dispose()`**
 | `net462` | .NET Framework 4.6.2 on Windows |
 | `net48`  | .NET Framework 4.8 on Windows |
 | `netstandard2.0` | .NET Core 2.x, .NET Core 3.x, .NET 5, .NET 6, .NET 7, .NET 8+ |
-
-Minimum NuGet dependencies (all from Microsoft):
-
-| Package | Purpose |
-|---|---|
-| `System.Buffers` | `ArrayPool<T>` for low-allocation frame reading/writing |
-| `System.Memory` | `ReadOnlyMemory<T>`, `Span<T>` on down-level targets |
-| `System.ValueTuple` | Tuple language support on **net462** |
-| `System.Runtime.CompilerServices.Unsafe` | Aligns `Span`/`ReadOnlySpan` dependencies across packages on .NET Framework |
-| `System.Threading.Channels` | Internal receive queue |
-| `Microsoft.Bcl.AsyncInterfaces` | `IAsyncEnumerable<T>`, `IAsyncDisposable` on down-level targets |
-| `System.Threading.Tasks.Extensions` | `ValueTask` extensions |
-
-
-## Project Structure
-
-```
-FrameWrench/
-├── README.md
-├── CONTRIBUTING.md
-│
-├── src/
-│   ├── FrameWrench.slnx                 # Solution file (VS 2022 17.10+)
-│   ├── FrameWrench/
-│   │   ├── FrameWrench.csproj
-│   │   ├── FrameWrenchClient.cs         # Main client class
-│   │   ├── FrameWrenchOptions.cs        # Configuration
-│   │   ├── Core/
-│   │   │   ├── FrameOpCode.cs           # RFC 6455 opcodes enum
-│   │   │   ├── WebSocketFrame.cs        # Frame model + factory methods
-│   │   │   ├── WebSocketCloseStatus.cs  # RFC 6455 close codes
-│   │   │   ├── WebSocketState.cs        # Connection state machine
-│   │   │   ├── WebSocketMessage.cs      # Reassembled message
-│   │   │   └── FrameWrenchException.cs  # Exception hierarchy
-│   │   └── Protocol/
-│   │       ├── HandshakeHelper.cs       # HTTP Upgrade + SHA-1 accept
-│   │       ├── FrameEncoder.cs          # Wire encoding + masking
-│   │       └── FrameDecoder.cs          # Wire decoding + validation
-│   └── tests/
-│       └── FrameWrench.Tests/
-│           ├── FrameWrench.Tests.csproj
-│           ├── FrameEncoderTests.cs     # Encoder unit tests
-│           ├── FrameDecoderTests.cs     # Decoder unit tests (all opcodes + lengths)
-│           ├── HandshakeHelperTests.cs  # Handshake unit tests (RFC vector)
-│           ├── WebSocketFrameTests.cs   # Frame model tests
-│           └── IntegrationTests.cs      # End-to-end tests vs in-process echo server
-│
-└── samples/
-    └── FrameWrench.Example/
-        ├── FrameWrench.Example.csproj
-        └── Program.cs                   # Full demo: connect, text, ping, fragment, close
-```
 
 
 ## Running the Example

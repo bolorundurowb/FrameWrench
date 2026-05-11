@@ -25,6 +25,9 @@
     <RepositoryUrl>https://github.com/bolorundurowb/FrameWrench.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <Title>Frame Wrench</Title>
+    <PackageReleaseNotes>- Initial release</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
