@@ -4,7 +4,7 @@
 
 FrameWrench gives you *explicit, frame-level control* over every WebSocket interaction — including raw Ping/Pong handling, fragmented messages, and direct access to individual frames — while still offering a convenient message-level API when you don't need that control.
 
-> ⚠️ **AI Disclosure:** This project was developed with the assistance of generative AI (Anthropic Claude). All code, architecture decisions, and documentation were reviewed and refined as part of the development process.
+> ⚠️ **AI Disclosure:** This project was developed with the assistance of generative AI. All code, architecture decisions, and documentation were reviewed and refined as part of the development process.
 
 ---
 
@@ -80,17 +80,17 @@ Then reference the resulting `.nupkg` in your project.
 ### Prerequisites
 
 - **.NET SDK 10** or later (required for **C# 13**, which this repo pins in all projects)
-- **.NET Framework 4.6.2** and **4.8** targeting packs / developer packs on Windows when building `net462`, `net48`, the sample, or tests for those monikers
+- **.NET Framework 4.6.2** and **4.8** targeting packs / developer packs on Windows when building `net462`, `net48`, the sample, or `src/tests` for those monikers
 - Visual Studio 2022 17.10+ or JetBrains Rider (for `.slnx` solution file support)
 
 ### Build
 
 ```bash
 # Restore + build all targets
-dotnet build FrameWrench.slnx
+dotnet build src/FrameWrench.slnx
 
 # Run unit and integration tests
-dotnet test FrameWrench.slnx
+dotnet test src/FrameWrench.slnx
 
 # Run the example app (.NET Framework; pick one installed TFM)
 dotnet run --project samples/FrameWrench.Example --framework net48
@@ -98,7 +98,7 @@ dotnet run --project samples/FrameWrench.Example --framework net48
 
 ### Opening in Visual Studio
 
-Open `FrameWrench.slnx` in Visual Studio 2022 17.10+. Older versions can open the individual `.csproj` files directly.
+Open `src/FrameWrench.slnx` in Visual Studio 2022 17.10+. Older versions can open the individual `.csproj` files directly.
 
 ---
 
@@ -479,34 +479,33 @@ Minimum NuGet dependencies (all from Microsoft):
 
 ```
 FrameWrench/
-├── FrameWrench.slnx                     # Solution file (VS 2022 17.10+)
 ├── README.md
 │
 ├── src/
-│   └── FrameWrench/
-│       ├── FrameWrench.csproj
-│       ├── FrameWrenchClient.cs         # Main client class
-│       ├── FrameWrenchOptions.cs        # Configuration
-│       ├── Core/
-│       │   ├── FrameOpCode.cs           # RFC 6455 opcodes enum
-│       │   ├── WebSocketFrame.cs        # Frame model + factory methods
-│       │   ├── WebSocketCloseStatus.cs  # RFC 6455 close codes
-│       │   ├── WebSocketState.cs        # Connection state machine
-│       │   ├── WebSocketMessage.cs      # Reassembled message
-│       │   └── FrameWrenchException.cs  # Exception hierarchy
-│       └── Protocol/
-│           ├── HandshakeHelper.cs       # HTTP Upgrade + SHA-1 accept
-│           ├── FrameEncoder.cs          # Wire encoding + masking
-│           └── FrameDecoder.cs          # Wire decoding + validation
-│
-├── tests/
-│   └── FrameWrench.Tests/
-│       ├── FrameWrench.Tests.csproj
-│       ├── FrameEncoderTests.cs         # Encoder unit tests
-│       ├── FrameDecoderTests.cs         # Decoder unit tests (all opcodes + lengths)
-│       ├── HandshakeHelperTests.cs      # Handshake unit tests (RFC vector)
-│       ├── WebSocketFrameTests.cs       # Frame model tests
-│       └── IntegrationTests.cs          # End-to-end tests vs in-process echo server
+│   ├── FrameWrench.slnx                 # Solution file (VS 2022 17.10+)
+│   ├── FrameWrench/
+│   │   ├── FrameWrench.csproj
+│   │   ├── FrameWrenchClient.cs         # Main client class
+│   │   ├── FrameWrenchOptions.cs        # Configuration
+│   │   ├── Core/
+│   │   │   ├── FrameOpCode.cs           # RFC 6455 opcodes enum
+│   │   │   ├── WebSocketFrame.cs        # Frame model + factory methods
+│   │   │   ├── WebSocketCloseStatus.cs  # RFC 6455 close codes
+│   │   │   ├── WebSocketState.cs        # Connection state machine
+│   │   │   ├── WebSocketMessage.cs      # Reassembled message
+│   │   │   └── FrameWrenchException.cs  # Exception hierarchy
+│   │   └── Protocol/
+│   │       ├── HandshakeHelper.cs       # HTTP Upgrade + SHA-1 accept
+│   │       ├── FrameEncoder.cs          # Wire encoding + masking
+│   │       └── FrameDecoder.cs          # Wire decoding + validation
+│   └── tests/
+│       └── FrameWrench.Tests/
+│           ├── FrameWrench.Tests.csproj
+│           ├── FrameEncoderTests.cs     # Encoder unit tests
+│           ├── FrameDecoderTests.cs     # Decoder unit tests (all opcodes + lengths)
+│           ├── HandshakeHelperTests.cs  # Handshake unit tests (RFC vector)
+│           ├── WebSocketFrameTests.cs   # Frame model tests
+│           └── IntegrationTests.cs      # End-to-end tests vs in-process echo server
 │
 └── samples/
     └── FrameWrench.Example/

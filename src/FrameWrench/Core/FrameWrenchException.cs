@@ -81,7 +81,7 @@ public class PingTimeoutException : FrameWrenchException
 
     /// <summary>Initialises the exception.</summary>
     public PingTimeoutException(TimeSpan timeout)
-        : base($"Pong was not received within {timeout.TotalMilliseconds:0} ms.")
+        : base($"A matching Pong was not received within {timeout.TotalMilliseconds:0} ms.")
     {
         Timeout = timeout;
     }

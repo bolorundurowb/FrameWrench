@@ -153,7 +153,7 @@ internal static class FrameDecoder
 
             if (n == 0)
                 throw new EndOfStreamException(
-                    $"Connection closed mid-frame (expected {count} bytes, received {totalRead}).");
+                    $"The connection closed mid-frame (expected {count} bytes, read {totalRead}).");
 
             totalRead += n;
         }

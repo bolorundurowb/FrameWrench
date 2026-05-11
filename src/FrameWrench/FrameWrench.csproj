@@ -7,10 +7,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NeutralLanguage>en-NG</NeutralLanguage>
     <RootNamespace>FrameWrench</RootNamespace>
     <AssemblyName>FrameWrench</AssemblyName>
     <Version>1.0.0</Version>
-    <Authors>Winner Timothy Olabamidele</Authors>
+    <Authors>Winner-Timothy Bolorunduro</Authors>
     <Description>Lightweight client-only RFC 6455 WebSocket library with explicit frame-level control. Targets .NET Framework 4.6.2+, .NET Framework 4.8, and .NET Standard 2.0.</Description>
     <PackageTags>websocket;rfc6455;websocket-client;frames;frame-level;ping;pong;fragmentation;dotnet-framework;netstandard;net462;net48;networking;tcp;tls;wss;low-level;binary-protocol;framewrench</PackageTags>
     <Optimize>true</Optimize>
@@ -19,9 +20,9 @@
     <PackageId>FrameWrench</PackageId>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <Copyright>Copyright (c) 2026 Winner Timothy Olabamidele</Copyright>
-    <PackageProjectUrl>https://github.com/PLACEHOLDER/FrameWrench</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/PLACEHOLDER/FrameWrench.git</RepositoryUrl>
+    <Copyright>Copyright (c) 2026 Winner-Timothy Bolorunduro</Copyright>
+    <PackageProjectUrl>https://github.com/bolorundurowb/FrameWrench</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/bolorundurowb/FrameWrench.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
@@ -31,4 +32,14 @@
     <InternalsVisibleTo Include="FrameWrench.Tests" />
   </ItemGroup>
 
-  <!-- Core runtime packages require
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
+    <PackageReference Include="System.Buffers" Version="4.5.1" />
+    <PackageReference Include="System.Memory" Version="4.5.5" />
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0" />
+    <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
+    <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.5.4" />
+    <PackageReference Include="System.ValueTuple" Version="4.5.0" />
+  </ItemGroup>
+</Project>

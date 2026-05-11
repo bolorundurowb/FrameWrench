@@ -98,7 +98,7 @@ public sealed class WebSocketFrame
     {
         if (OpCode != FrameOpCode.Close)
             throw new InvalidOperationException(
-                $"GetCloseData may only be called on Close frames (this frame is {OpCode}).");
+                $"GetCloseData may only be invoked on Close frames (this frame's opcode is {OpCode}).");
 
         var span = Payload.Span;
         if (span.Length < 2)

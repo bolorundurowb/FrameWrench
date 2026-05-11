@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="../README.md" />
+  </Folder>
+  <Project Path="FrameWrench/FrameWrench.csproj" />
+  <Project Path="tests/FrameWrench.Tests/FrameWrench.Tests.csproj" />
+  <Project Path="../samples/FrameWrench.Example/FrameWrench.Example.csproj" />
+</Solution>

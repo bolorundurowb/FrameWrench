@@ -118,7 +118,7 @@ internal static class HandshakeHelper
         var lines       = response.Split(new[] { "\r\n" }, StringSplitOptions.None);
 
         if (lines.Length == 0)
-            throw new WebSocketHandshakeException("Empty response from server.", statusLine: null);
+            throw new WebSocketHandshakeException("Empty response from the server.", statusLine: null);
 
         var statusLine = lines[0];
 
@@ -188,7 +188,7 @@ internal static class HandshakeHelper
 
             if (n == 0)
                 throw new WebSocketHandshakeException(
-                    "Connection closed before the HTTP handshake completed.");
+                    "The connection was closed before the HTTP handshake completed.");
 
             buffer.Add(singleByte[0]);
 
@@ -203,7 +203,7 @@ internal static class HandshakeHelper
 
             if (buffer.Count > 16 * 1024)
                 throw new WebSocketHandshakeException(
-                    "HTTP response headers exceeded the 16 KiB limit.");
+                    "HTTP response headers exceeded the 16 KiB size limit.");
         }
 
         return buffer.ToArray();

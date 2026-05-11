@@ -6,21 +6,8 @@ using Xunit;
 
 namespace FrameWrench.Tests;
 
-/// <summary>
-/// End-to-end integration tests for <see cref="FrameWrenchClient"/> against an
-/// in-process WebSocket echo server built on <see cref="HttpListener"/>.
-/// </summary>
-/// <remarks>
-/// The echo server uses <c>System.Net.WebSockets</c> (the built-in .NET server-side
-/// implementation) only as a test fixture; <see cref="FrameWrenchClient"/> is
-/// always the client under test.
-/// </remarks>
 public sealed class IntegrationTests : IAsyncLifetime
 {
-    // -----------------------------------------------------------------------
-    // In-process echo server
-    // -----------------------------------------------------------------------
-
     private HttpListener?            _listener;
     private CancellationTokenSource  _serverCts = new CancellationTokenSource();
     private Task?                    _serverTask;
@@ -39,9 +26,9 @@ public sealed class IntegrationTests : IAsyncLifetime
     public async Task DisposeAsync()
     {
         _serverCts.Cancel();
-        try { _listener?.Stop(); } catch { /* ignore */ }
+        try { _listener?.Stop(); } catch { }
         if (_serverTask is not null)
-            try { await _serverTask; } catch { /* ignore */ }
+            try { await _serverTask; } catch { }
     }
 
     private async Task RunEchoServerAsync(CancellationToken ct)
@@ -77,7 +64,7 @@ public sealed class IntegrationTests : IAsyncLifetime
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
                         try { await ws.CloseAsync(System.Net.WebSockets.WebSocketCloseStatus.NormalClosure, "bye", ct); }
-                        catch { /* ignore */ }
+                        catch { }
                         break;
                     }
 
@@ -112,10 +99,6 @@ public sealed class IntegrationTests : IAsyncLifetime
             ConnectTimeout = TimeSpan.FromSeconds(10),
             PingTimeout    = TimeSpan.FromSeconds(5),
         });
-
-    // -----------------------------------------------------------------------
-    // Tests
-    // -----------------------------------------------------------------------
 
     [Fact]
     public async Task Connect_OpensSuccessfully()
@@ -166,7 +149,7 @@ public sealed class IntegrationTests : IAsyncLifetime
         var (received, roundtrip) = await client.PingAsync(
             timeout: TimeSpan.FromSeconds(5));
 
-        received.ShouldBeTrue("server must respond to Ping with a Pong");
+        received.ShouldBeTrue("The server must respond to Ping with a Pong.");
         roundtrip.ShouldBeLessThan(TimeSpan.FromSeconds(5));
 
         await client.CloseAsync();
@@ -193,7 +176,6 @@ public sealed class IntegrationTests : IAsyncLifetime
         await using var client = NewClient();
         await client.ConnectAsync(ServerUri);
 
-        // Two-frame fragmented text message
         await client.SendFrameAsync(FrameOpCode.Text,
             System.Text.Encoding.UTF8.GetBytes("Hello, "), isFinal: false);
         await client.SendFrameAsync(FrameOpCode.Continuation,
@@ -240,7 +222,7 @@ public sealed class IntegrationTests : IAsyncLifetime
 
         await client.ConnectAsync(ServerUri);
         await client.SendTextAsync("event test");
-        await Task.Delay(300); // give pump time to deliver
+        await Task.Delay(300);
 
         gotFrames.ShouldNotBeEmpty();
 

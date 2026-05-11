@@ -9,6 +9,7 @@
     <RootNamespace>FrameWrench.Tests</RootNamespace>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+    <NeutralLanguage>en-NG</NeutralLanguage>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,7 +30,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\FrameWrench\FrameWrench.csproj" />
+    <ProjectReference Include="..\..\FrameWrench\FrameWrench.csproj" />
   </ItemGroup>
 
 </Project>

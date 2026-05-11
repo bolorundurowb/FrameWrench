@@ -36,7 +36,7 @@ namespace FrameWrench;
 /// <strong>Thread-safety:</strong> The receive pump decodes frames into an in-memory channel.
 /// Multiple callers may use <see cref="ReceiveFrameAsync"/>, <see cref="GetFrameStream"/>, or
 /// <see cref="ReceiveMessageAsync"/> concurrently; each frame is delivered to exactly one consumer.
-/// If several tasks compete for frames, ordering of logical messages is still the application's
+/// If several tasks compete for frames, ordering of logical messages remains your application's
 /// responsibility. Concurrent sends from multiple threads are serialised internally via a
 /// <see cref="SemaphoreSlim"/>.
 /// </para>
@@ -113,10 +113,10 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 
         if (_state != WebSocketState.None)
             throw new WebSocketStateException(
-                _state, "ConnectAsync can only be called once on a new client.");
+                _state, "ConnectAsync may only be called once on a new client instance.");
 
         _state = WebSocketState.Connecting;
-        _logger.LogDebug("Connecting to {Uri}", uri);
+        _logger.LogDebug("Connecting to {Uri}.", uri);
 
         bool useTls = scheme == "wss";
         int  port   = uri.IsDefaultPort ? (useTls ? 443 : 80) : uri.Port;
@@ -138,7 +138,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _state = WebSocketState.Aborted;
-            throw new FrameWrenchException($"TCP connect to {uri.Host}:{port} failed.", ex);
+            throw new FrameWrenchException($"TCP connection to {uri.Host}:{port} failed.", ex);
         }
 
         Stream netStream = _tcp.GetStream();
@@ -189,7 +189,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
             .ConfigureAwait(false);
 
         _state = WebSocketState.Open;
-        _logger.LogInformation("WebSocket connection established to {Uri}", uri);
+        _logger.LogInformation("WebSocket connection established to {Uri}.", uri);
 
         _pumpCts  = new CancellationTokenSource();
         _pumpTask = Task.Run(() => ReceivePumpAsync(_pumpCts.Token), CancellationToken.None);
@@ -278,7 +278,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         }
 
         if (pingPayload.Length > 125)
-            throw new ArgumentException("Ping payload must not exceed 125 bytes.", nameof(payload));
+            throw new ArgumentException("Ping payload must not exceed 125 bytes (RFC 6455).", nameof(payload));
 
         var key = Convert.ToBase64String(pingPayload);
         var waiter = new PingWaiter();
@@ -287,7 +287,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
         await SendRawFrameAsync(WebSocketFrame.Ping(pingPayload), ct).ConfigureAwait(false);
-        _logger.LogDebug("Ping sent (key={Key})", key);
+        _logger.LogDebug("Ping sent (correlation key={Key}).", key);
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(timeout);
@@ -296,13 +296,13 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         {
             await TaskUtils.WaitAsync(waiter.Task, timeoutCts.Token).ConfigureAwait(false);
             sw.Stop();
-            _logger.LogDebug("Pong received (key={Key} rtt={Ms:0.0}ms)", key, sw.Elapsed.TotalMilliseconds);
+            _logger.LogDebug("Pong received (key={Key}, round-trip={Ms:0.0} ms).", key, sw.Elapsed.TotalMilliseconds);
             return (true, sw.Elapsed);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             sw.Stop();
-            _logger.LogWarning("Ping timed out after {Ms:0}ms (key={Key})", timeout.TotalMilliseconds, key);
+            _logger.LogWarning("Ping timed out after {Ms:0} ms (key={Key}).", timeout.TotalMilliseconds, key);
             return (false, sw.Elapsed);
         }
         finally
@@ -340,7 +340,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         catch (ChannelClosedException)
         {
             throw new FrameWrenchException(
-                $"The WebSocket connection is closed (state={_state}). No more frames available.");
+                $"The WebSocket connection is closed (state={_state}). No further frames are available.");
         }
     }
 
@@ -433,7 +433,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
             return;
 
         _state = WebSocketState.CloseSent;
-        _logger.LogDebug("Sending Close frame (status={Status})", status);
+        _logger.LogDebug("Sending Close frame (status={Status}).", status);
 
         try
         {
@@ -457,7 +457,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         }
         catch (OperationCanceledException)
         {
-            _logger.LogWarning("Close handshake timed out; forcibly closing.");
+            _logger.LogWarning("Close handshake timed out; closing the connection.");
         }
 
         CleanUp();
@@ -512,18 +512,18 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
                 catch (OperationCanceledException) { break; }
                 catch (EndOfStreamException ex)
                 {
-                    _logger.LogInformation("Remote closed the connection: {Msg}", ex.Message);
+                    _logger.LogInformation("The remote party closed the connection: {Msg}", ex.Message);
                     if (_state == WebSocketState.Open) _state = WebSocketState.Aborted;
                     break;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error reading WebSocket frame");
+                    _logger.LogError(ex, "Error whilst reading a WebSocket frame.");
                     if (_state == WebSocketState.Open) _state = WebSocketState.Aborted;
                     break;
                 }
 
-                _logger.LogTrace("Frame in: {Frame}", frame);
+                _logger.LogTrace("Frame received: {Frame}", frame);
 
                 switch (frame.OpCode)
                 {
@@ -549,7 +549,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         {
             _frameChannel.Writer.TryComplete();
             if (_state == WebSocketState.Open) _state = WebSocketState.Aborted;
-            _logger.LogDebug("Receive pump exited (state={State})", _state);
+            _logger.LogDebug("Receive pump has stopped (state={State}).", _state);
         }
     }
 
@@ -565,7 +565,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         var key = Convert.ToBase64String(pong.Payload.ToArray());
         if (_pendingPings.TryRemove(key, out var waiter))
         {
-            _logger.LogTrace("Pong matched PingAsync (key={Key})", key);
+            _logger.LogTrace("Pong matched outstanding Ping (key={Key}).", key);
             waiter.SetResult();
         }
     }
@@ -574,19 +574,19 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     {
         try
         {
-            _logger.LogTrace("Replying to Ping with Pong");
+            _logger.LogTrace("Replying to Ping with Pong.");
             await SendRawFrameAsync(WebSocketFrame.Pong(pingPayload), ct).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to send Pong");
+            _logger.LogWarning(ex, "Could not send Pong reply.");
         }
     }
 
     private async Task HandleIncomingCloseAsync(WebSocketFrame frame, CancellationToken ct)
     {
         frame.GetCloseData(out var status, out var reason);
-        _logger.LogInformation("Close frame received (status={Status} reason='{Reason}')", status, reason);
+        _logger.LogInformation("Close frame received (status={Status}, reason='{Reason}').", status, reason);
 
         if (_state == WebSocketState.CloseSent)
         {
@@ -603,7 +603,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to send Close echo");
+                _logger.LogWarning(ex, "Could not send Close frame acknowledgement.");
             }
             _state = WebSocketState.Closed;
         }
@@ -611,7 +611,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 
     private async Task AutoPingLoopAsync(CancellationToken ct)
     {
-        _logger.LogDebug("Auto-ping started (interval={Interval})", _options.KeepAliveInterval);
+        _logger.LogDebug("Auto-ping started (interval={Interval}).", _options.KeepAliveInterval);
         try
         {
             while (!ct.IsCancellationRequested && _state == WebSocketState.Open)
@@ -624,19 +624,19 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 
                 if (!received)
                 {
-                    _logger.LogWarning("Auto-ping: pong not received; closing connection.");
-                    _ = CloseAsync(WebSocketCloseStatus.GoingAway, "Ping timeout",
+                    _logger.LogWarning("Auto-ping: no Pong received; closing the connection.");
+                    _ = CloseAsync(WebSocketCloseStatus.GoingAway, "Ping timed out",
                         CancellationToken.None);
                     break;
                 }
 
-                _logger.LogDebug("Auto-ping RTT: {Ms:0.0}ms", elapsed.TotalMilliseconds);
+                _logger.LogDebug("Auto-ping round-trip: {Ms:0.0} ms.", elapsed.TotalMilliseconds);
             }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Auto-ping loop error");
+            _logger.LogWarning(ex, "Auto-ping loop reported an error.");
         }
     }
 
@@ -659,7 +659,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         if (_state != WebSocketState.Open)
             throw new WebSocketStateException(
                 _state,
-                $"{caller} requires the connection to be Open (current: {_state}).");
+                $"{caller} requires an open connection (current state: {_state}).");
     }
 
     private void CleanUp()
