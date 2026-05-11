@@ -1,7 +1,6 @@
 using System.Globalization;
 using FrameWrench;
 using FrameWrench.Core;
-using Microsoft.Extensions.Logging;
 
 namespace FrameWrench.Example;
 
@@ -19,14 +18,11 @@ public static class Program
 
         Console.ForegroundColor = ConsoleColor.Cyan;
         Console.WriteLine("╔══════════════════════════════════════╗");
-        Console.WriteLine("║   FrameWrench — Console example    ║");
+        Console.WriteLine("║   FrameWrench - Console example    ║");
         Console.WriteLine("╚══════════════════════════════════════╝");
         Console.ResetColor();
         Console.WriteLine($"Target URI: {uri}");
         Console.WriteLine();
-
-        using var loggerFactory = LoggerFactory.Create(b =>
-            b.AddConsole().SetMinimumLevel(LogLevel.Debug));
 
         var options = new FrameWrenchOptions
         {
@@ -35,7 +31,7 @@ public static class Program
             AutoPing        = false,
         };
 
-        await using var client = new FrameWrenchClient(options, loggerFactory.CreateLogger<FrameWrenchClient>());
+        await using var client = new FrameWrenchClient(options);
 
         client.FrameReceived += (_, frame) =>
         {

@@ -6,8 +6,6 @@ using System.Security.Authentication;
 using System.Threading.Channels;
 using FrameWrench.Core;
 using FrameWrench.Protocol;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FrameWrench;
 
@@ -19,17 +17,17 @@ namespace FrameWrench;
 /// <para>
 /// <strong>Frame-level API (primary)</strong>
 /// <list type="bullet">
-///   <item><see cref="SendFrameAsync(FrameOpCode, ReadOnlyMemory{byte}, bool, CancellationToken)"/> – sends any frame type.</item>
-///   <item><see cref="ReceiveFrameAsync"/> – reads the next frame from the server.</item>
-///   <item><see cref="GetFrameStream"/> – returns an async stream of frames.</item>
-///   <item><see cref="PingAsync"/> – sends a Ping and awaits the correlated Pong.</item>
+///   <item><see cref="SendFrameAsync(FrameOpCode, ReadOnlyMemory{byte}, bool, CancellationToken)"/> - sends any frame type.</item>
+///   <item><see cref="ReceiveFrameAsync"/> - reads the next frame from the server.</item>
+///   <item><see cref="GetFrameStream"/> - returns an async stream of frames.</item>
+///   <item><see cref="PingAsync"/> - sends a Ping and awaits the correlated Pong.</item>
 /// </list>
 /// </para>
 /// <para>
 /// <strong>Message-level API (convenience)</strong>
 /// <list type="bullet">
-///   <item><see cref="SendTextAsync"/> / <see cref="SendBinaryAsync"/> – single-call sends.</item>
-///   <item><see cref="ReceiveMessageAsync"/> – reassembles fragmented frames into one message.</item>
+///   <item><see cref="SendTextAsync"/> / <see cref="SendBinaryAsync"/> - single-call sends.</item>
+///   <item><see cref="ReceiveMessageAsync"/> - reassembles fragmented frames into one message.</item>
 /// </list>
 /// </para>
 /// <para>
@@ -48,7 +46,6 @@ namespace FrameWrench;
 public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 {
     private readonly FrameWrenchOptions _options;
-    private readonly ILogger            _logger;
 
     private TcpClient? _tcp;
     private Stream?    _stream;
@@ -85,13 +82,9 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     /// Initialises a new <see cref="FrameWrenchClient"/> with optional configuration.
     /// </summary>
     /// <param name="options">Client configuration; pass <c>null</c> for defaults.</param>
-    /// <param name="logger">Optional logger; a no-op logger is used when <c>null</c>.</param>
-    public FrameWrenchClient(
-        FrameWrenchOptions? options = null,
-        ILogger?            logger  = null)
+    public FrameWrenchClient(FrameWrenchOptions? options = null)
     {
         _options = options ?? new FrameWrenchOptions();
-        _logger  = logger  ?? NullLogger.Instance;
     }
 
     /// <summary>
@@ -116,7 +109,6 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
                 _state, "ConnectAsync may only be called once on a new client instance.");
 
         _state = WebSocketState.Connecting;
-        _logger.LogDebug("Connecting to {Uri}.", uri);
 
         bool useTls = scheme == "wss";
         int  port   = uri.IsDefaultPort ? (useTls ? 443 : 80) : uri.Port;
@@ -189,7 +181,6 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
             .ConfigureAwait(false);
 
         _state = WebSocketState.Open;
-        _logger.LogInformation("WebSocket connection established to {Uri}.", uri);
 
         _pumpCts  = new CancellationTokenSource();
         _pumpTask = Task.Run(() => ReceivePumpAsync(_pumpCts.Token), CancellationToken.None);
@@ -287,7 +278,6 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
         await SendRawFrameAsync(WebSocketFrame.Ping(pingPayload), ct).ConfigureAwait(false);
-        _logger.LogDebug("Ping sent (correlation key={Key}).", key);
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(timeout);
@@ -296,13 +286,11 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         {
             await TaskUtils.WaitAsync(waiter.Task, timeoutCts.Token).ConfigureAwait(false);
             sw.Stop();
-            _logger.LogDebug("Pong received (key={Key}, round-trip={Ms:0.0} ms).", key, sw.Elapsed.TotalMilliseconds);
             return (true, sw.Elapsed);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             sw.Stop();
-            _logger.LogWarning("Ping timed out after {Ms:0} ms (key={Key}).", timeout.TotalMilliseconds, key);
             return (false, sw.Elapsed);
         }
         finally
@@ -433,7 +421,6 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
             return;
 
         _state = WebSocketState.CloseSent;
-        _logger.LogDebug("Sending Close frame (status={Status}).", status);
 
         try
         {
@@ -455,10 +442,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
             await TaskUtils.WaitAsync(
                 _pumpTask ?? Task.CompletedTask, closeCts.Token).ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
-        {
-            _logger.LogWarning("Close handshake timed out; closing the connection.");
-        }
+        catch (OperationCanceledException) { }
 
         CleanUp();
     }
@@ -510,20 +494,16 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
                         .ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) { break; }
-                catch (EndOfStreamException ex)
+                catch (EndOfStreamException)
                 {
-                    _logger.LogInformation("The remote party closed the connection: {Msg}", ex.Message);
                     if (_state == WebSocketState.Open) _state = WebSocketState.Aborted;
                     break;
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    _logger.LogError(ex, "Error whilst reading a WebSocket frame.");
                     if (_state == WebSocketState.Open) _state = WebSocketState.Aborted;
                     break;
                 }
-
-                _logger.LogTrace("Frame received: {Frame}", frame);
 
                 switch (frame.OpCode)
                 {
@@ -549,7 +529,6 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         {
             _frameChannel.Writer.TryComplete();
             if (_state == WebSocketState.Open) _state = WebSocketState.Aborted;
-            _logger.LogDebug("Receive pump has stopped (state={State}).", _state);
         }
     }
 
@@ -564,29 +543,24 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         if (pong.Payload.IsEmpty) return;
         var key = Convert.ToBase64String(pong.Payload.ToArray());
         if (_pendingPings.TryRemove(key, out var waiter))
-        {
-            _logger.LogTrace("Pong matched outstanding Ping (key={Key}).", key);
             waiter.SetResult();
-        }
     }
 
     private async Task TrySendPongAsync(ReadOnlyMemory<byte> pingPayload, CancellationToken ct)
     {
         try
         {
-            _logger.LogTrace("Replying to Ping with Pong.");
             await SendRawFrameAsync(WebSocketFrame.Pong(pingPayload), ct).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch
         {
-            _logger.LogWarning(ex, "Could not send Pong reply.");
+            // Best-effort Pong; connection may already be closing.
         }
     }
 
     private async Task HandleIncomingCloseAsync(WebSocketFrame frame, CancellationToken ct)
     {
-        frame.GetCloseData(out var status, out var reason);
-        _logger.LogInformation("Close frame received (status={Status}, reason='{Reason}').", status, reason);
+        frame.GetCloseData(out var status, out _);
 
         if (_state == WebSocketState.CloseSent)
         {
@@ -601,9 +575,9 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
                     WebSocketFrame.Close(status ?? WebSocketCloseStatus.NormalClosure), ct)
                     .ConfigureAwait(false);
             }
-            catch (Exception ex)
+            catch
             {
-                _logger.LogWarning(ex, "Could not send Close frame acknowledgement.");
+                // Best-effort Close echo.
             }
             _state = WebSocketState.Closed;
         }
@@ -611,7 +585,6 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 
     private async Task AutoPingLoopAsync(CancellationToken ct)
     {
-        _logger.LogDebug("Auto-ping started (interval={Interval}).", _options.KeepAliveInterval);
         try
         {
             while (!ct.IsCancellationRequested && _state == WebSocketState.Open)
@@ -619,24 +592,21 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
                 await Task.Delay(_options.KeepAliveInterval, ct).ConfigureAwait(false);
                 if (_state != WebSocketState.Open) break;
 
-                var (received, elapsed) = await PingAsync(
+                var (received, _) = await PingAsync(
                     timeout: _options.PingTimeout, ct: ct).ConfigureAwait(false);
 
                 if (!received)
                 {
-                    _logger.LogWarning("Auto-ping: no Pong received; closing the connection.");
                     _ = CloseAsync(WebSocketCloseStatus.GoingAway, "Ping timed out",
                         CancellationToken.None);
                     break;
                 }
-
-                _logger.LogDebug("Auto-ping round-trip: {Ms:0.0} ms.", elapsed.TotalMilliseconds);
             }
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex)
+        catch
         {
-            _logger.LogWarning(ex, "Auto-ping loop reported an error.");
+            // Auto-ping loop ended with an unexpected error; connection state reflects outcome.
         }
     }
 

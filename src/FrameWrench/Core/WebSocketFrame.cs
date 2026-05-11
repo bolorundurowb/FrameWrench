@@ -51,7 +51,7 @@ public sealed class WebSocketFrame
     public FrameOpCode OpCode { get; }
 
     /// <summary>
-    /// <c>true</c> when the FIN bit is set — this is the final (or only) fragment
+    /// <c>true</c> when the FIN bit is set - this is the final (or only) fragment
     /// of the message.
     /// </summary>
     public bool IsFinal { get; }

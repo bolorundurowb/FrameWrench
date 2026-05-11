@@ -2,7 +2,7 @@
 
 **A lightweight, client-only RFC 6455 WebSocket library for .NET Framework 4.6.2+, .NET Framework 4.8, and .NET Standard 2.0.**
 
-FrameWrench gives you *explicit, frame-level control* over every WebSocket interaction — including raw Ping/Pong handling, fragmented messages, and direct access to individual frames — while still offering a convenient message-level API when you don't need that control.
+FrameWrench gives you *explicit, frame-level control* over every WebSocket interaction - including raw Ping/Pong handling, fragmented messages, and direct access to individual frames - while still offering a convenient message-level API when you don't need that control.
 
 > ⚠️ **AI Disclosure:** This project was developed with the assistance of generative AI. All code, architecture decisions, and documentation were reviewed and refined as part of the development process.
 
@@ -14,12 +14,12 @@ FrameWrench gives you *explicit, frame-level control* over every WebSocket inter
 
 The built-in `System.Net.WebSockets.ClientWebSocket` introduced in .NET 4.5 abstracts away the frame layer almost entirely. It does not:
 
-- Expose individual frames — you only get reassembled messages.
+- Expose individual frames - you only get reassembled messages.
 - Let you send or intercept Ping/Pong frames directly.
 - Allow manual control over message fragmentation.
 - Provide a frame-level event model.
 
-For applications targeting .NET Framework 4.6.2 or 4.8 that need **frame-level control** — such as those implementing custom heartbeat logic, real-time latency measurement via explicit Ping/Pong correlation, or streaming large payloads as controlled fragments — `ClientWebSocket` simply is not the right tool.
+For applications targeting .NET Framework 4.6.2 or 4.8 that need **frame-level control** - such as those implementing custom heartbeat logic, real-time latency measurement via explicit Ping/Pong correlation, or streaming large payloads as controlled fragments - `ClientWebSocket` simply is not the right tool.
 
 ### Why not an existing open-source library?
 
@@ -29,12 +29,12 @@ As of early 2025 there is no maintained, open-source WebSocket *client* library 
 2. **Targets .NET Framework 4.6.2 / 4.8** with no platform-specific dependencies
 3. Is **actively maintained** and free of external WebSocket-specific NuGet dependencies
 
-- **WebSocketSharp** — unmaintained since ~2022; server-centric; limited frame API.
-- **Fleck / SuperWebSocket** — server libraries, not client.
-- **SignalR** — protocol layer on top of WebSockets; no raw frame access.
-- **websocket-client (dotnet-websocket-client)** — message-level only; no frame events.
+- **WebSocketSharp** - unmaintained since ~2022; server-centric; limited frame API.
+- **Fleck / SuperWebSocket** - server libraries, not client.
+- **SignalR** - protocol layer on top of WebSockets; no raw frame access.
+- **websocket-client (dotnet-websocket-client)** - message-level only; no frame events.
 
-FrameWrench fills this gap: a clean, minimal, fully RFC 6455–compliant *client* library that treats frames as first-class citizens.
+FrameWrench fills this gap: a clean, minimal, fully RFC 6455-compliant *client* library that treats frames as first-class citizens.
 
 ---
 
@@ -51,27 +51,53 @@ FrameWrench fills this gap: a clean, minimal, fully RFC 6455–compliant *client
 | **TLS support** | Full `wss://` with configurable `SslProtocols` and cert validation callback |
 | **Auto-Ping (opt-in)** | Configurable keepalive via `FrameWrenchOptions.AutoPing` |
 | **Zero WS dependencies** | No external WebSocket NuGet packages; only `System.Buffers`, `System.Memory`, `System.ValueTuple`, `System.Threading.Channels`, and related BCL shims |
-| **Structured logging** | Optional `ILogger` integration; no-op when not provided |
+| **Logger-agnostic** | No `ILogger` or logging package dependency - use NLog, Serilog, `Trace`, or your own wrappers around `FrameReceived` / exceptions |
 | **Target frameworks** | `net462`, `net48`, `netstandard2.0` |
 
 ---
 
 ## Installation
 
-FrameWrench is distributed as a source-included library. Clone the repository and add a project reference:
+**Recommended:** install **FrameWrench** from [NuGet](https://www.nuget.org/packages/FrameWrench) so you get a signed, versioned package and transitive dependencies resolved automatically.
+
+### CLI
+
+```bash
+dotnet add package FrameWrench
+```
+
+To pin a specific version:
+
+```bash
+dotnet add package FrameWrench --version 1.0.0
+```
+
+### Project file
+
+```xml
+<ItemGroup>
+  <PackageReference Include="FrameWrench" Version="1.0.0" />
+</ItemGroup>
+```
+
+Use the latest **stable** version from the NuGet gallery (the value above is illustrative).
+
+### From source (contributors or local builds)
+
+Clone the repository and reference the library project directly:
 
 ```xml
 <ProjectReference Include="../path/to/FrameWrench/src/FrameWrench/FrameWrench.csproj" />
 ```
 
-Or build the NuGet package:
+Or produce a local package:
 
 ```bash
 cd src/FrameWrench
 dotnet pack -c Release
 ```
 
-Then reference the resulting `.nupkg` in your project.
+Then consume the resulting `.nupkg` via a [local NuGet feed](https://learn.microsoft.com/en-us/nuget/hosting-packages/local-feeds) or `dotnet add package` with a `--source` path.
 
 ---
 
@@ -132,7 +158,8 @@ await client.CloseAsync();
 The main class. Create one per connection.
 
 ```csharp
-var client = new FrameWrenchClient(options, logger);
+var client = new FrameWrenchClient(options);
+// or: new FrameWrenchClient() with defaults
 ```
 
 #### Connection
@@ -231,7 +258,7 @@ await client.CloseAsync(
 
 ---
 
-## Configuration — FrameWrenchOptions
+## Configuration - FrameWrenchOptions
 
 ```csharp
 var options = new FrameWrenchOptions
@@ -314,7 +341,7 @@ await client.SendFrameAsync(FrameOpCode.Continuation,
 ```csharp
 await foreach (var frame in client.GetFrameStream(ct))
 {
-    // Control frames (Ping, Pong) may be interleaved — handle them
+    // Control frames (Ping, Pong) may be interleaved - handle them
     if (frame.IsControl) continue;
 
     // Accumulate fragment payloads
@@ -346,7 +373,7 @@ Console.WriteLine(msg.GetText());
 `PingAsync` generates (or uses your provided) payload, stores it keyed by its Base64 representation, sends the Ping frame, and awaits a `TaskCompletionSource`. The internal receive pump detects incoming Pong frames, looks up the key, and completes the TCS. If no Pong arrives within the timeout, `(false, elapsed)` is returned.
 
 ```csharp
-// The payload is echoed verbatim in the Pong — use it as a correlation key
+// The payload is echoed verbatim in the Pong - use it as a correlation key
 var (ok, rtt) = await client.PingAsync(
     payload: Encoding.UTF8.GetBytes("probe-1"),
     timeout: TimeSpan.FromSeconds(5));
@@ -372,7 +399,7 @@ await foreach (var frame in client.GetFrameStream(ct))
 ### Unsolicited Pong (keepalive)
 
 ```csharp
-// Unidirectional heartbeat — no Ping required first
+// Unidirectional heartbeat - no Ping required first
 await client.SendFrameAsync(WebSocketFrame.Pong());
 ```
 
@@ -409,7 +436,7 @@ All FrameWrench exceptions derive from `FrameWrenchException`:
 | `WebSocketHandshakeException` | HTTP upgrade failed, non-101 status, bad `Sec-WebSocket-Accept` |
 | `WebSocketProtocolException` | RFC 6455 violation: reserved opcode, masked server frame, oversized control frame, fragmented control frame |
 | `WebSocketStateException` | Operation attempted in wrong state (e.g., send after close) |
-| `PingTimeoutException` | Informational — `PingAsync` returns `(false, elapsed)` instead of throwing this; reserved for strict mode |
+| `PingTimeoutException` | Informational - `PingAsync` returns `(false, elapsed)` instead of throwing this; reserved for strict mode |
 | `EndOfStreamException` | Server closed the TCP connection mid-frame |
 
 ```csharp
@@ -435,20 +462,9 @@ Prefer **`await client.DisposeAsync()`** (or `await using`) over **`Dispose()`**
 
 ---
 
-## Logging
+## Observability
 
-Pass any `ILogger` to the constructor. FrameWrench uses structured log messages at Debug, Information, Warning, and Error levels:
-
-```csharp
-using var loggerFactory = LoggerFactory.Create(b =>
-    b.AddConsole().SetMinimumLevel(LogLevel.Debug));
-
-var client = new FrameWrenchClient(
-    options,
-    loggerFactory.CreateLogger<FrameWrenchClient>());
-```
-
-Without a logger, a `NullLogger` is used automatically — zero overhead.
+The library does not accept or emit logs through `Microsoft.Extensions.Logging`. Instrument your app as you prefer: handle `FrameReceived`, catch `FrameWrenchException` types from `ConnectAsync` / send / receive, and inspect `client.State` when diagnosing disconnects.
 
 ---
 
@@ -471,7 +487,6 @@ Minimum NuGet dependencies (all from Microsoft):
 | `System.Threading.Channels` | Internal receive queue |
 | `Microsoft.Bcl.AsyncInterfaces` | `IAsyncEnumerable<T>`, `IAsyncDisposable` on down-level targets |
 | `System.Threading.Tasks.Extensions` | `ValueTask` extensions |
-| `Microsoft.Extensions.Logging.Abstractions` | Optional structured logging (zero-cost no-op) |
 
 ---
 
@@ -533,16 +548,17 @@ dotnet run --project samples/FrameWrench.Example --framework net48 -- ws://local
 2. Ensure `dotnet test` passes on all targets before opening a PR.
 3. Add tests for any new protocol behaviour.
 4. Follow the existing XML-doc comment style.
+5. **CI and Codecov:** pushes and PRs to `master` run `.github/workflows/ci.yml` (build, test, coverage). Maintainers should add a **`CODECOV_TOKEN`** repository secret from [Codecov](https://codecov.io) so coverage uploads succeed; forks may rely on Codecov’s tokenless rules for public repositories when the upstream org allows it.
 
 ---
 
 ## License
 
-MIT — see `LICENSE` for details.
+MIT - see `LICENSE` for details.
 
 ---
 
 ## Acknowledgements
 
-- [RFC 6455 — The WebSocket Protocol](https://datatracker.ietf.org/doc/html/rfc6455)
+- [RFC 6455 - The WebSocket Protocol](https://datatracker.ietf.org/doc/html/rfc6455)
 - Developed with assistance from [Anthropic Claude](https://claude.ai)

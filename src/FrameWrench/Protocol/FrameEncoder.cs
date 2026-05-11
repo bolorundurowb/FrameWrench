@@ -18,8 +18,8 @@ namespace FrameWrench.Protocol;
 /// Wire format (variable-length header + payload):
 /// <code>
 ///  Byte 0:  FIN(1) RSV1(1) RSV2(1) RSV3(1) Opcode(4)
-///  Byte 1:  MASK(1) PayloadLen(7)         [0–125]
-///         or MASK(1) 126(7) + 16-bit len  [126–65535]
+///  Byte 1:  MASK(1) PayloadLen(7)         [0-125]
+///         or MASK(1) 126(7) + 16-bit len  [126-65535]
 ///         or MASK(1) 127(7) + 64-bit len  [&gt;65535]
 ///  [4 bytes] Masking key (if MASK=1)
 ///  [N bytes] Masked payload
