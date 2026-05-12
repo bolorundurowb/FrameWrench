@@ -133,7 +133,6 @@ public class IncomingUtf8MessageValidatorTests
         var v = new IncomingUtf8MessageValidator();
         v.OnDataFrame(B([1], fin: false));
         v.Reset();
-        // After reset, starting a new binary message should not throw
         v.OnDataFrame(B([2], fin: true));
     }
 
@@ -171,7 +170,6 @@ public class IncomingUtf8MessageValidatorTests
         var v = new IncomingUtf8MessageValidator();
         v.OnDataFrame(T(U("hel"), fin: false));
         v.OnDataFrame(C(U("lo"), fin: true));
-        // should be able to start a new text message after fragmented one completes
         v.OnDataFrame(T(U("next"), fin: true));
     }
 }

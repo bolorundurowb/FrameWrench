@@ -3,13 +3,14 @@ using System.Net.WebSockets;
 using FrameWrench.Core;
 using Shouldly;
 using Xunit;
+using WebSocketState = FrameWrench.Core.WebSocketState;
 
 namespace FrameWrench.Tests;
 
 public sealed class IntegrationTests : IAsyncLifetime
 {
     private HttpListener? _listener;
-    private CancellationTokenSource _serverCts = new CancellationTokenSource();
+    private CancellationTokenSource _serverCts = new();
     private Task? _serverTask;
     private int _port;
 
@@ -91,10 +92,10 @@ public sealed class IntegrationTests : IAsyncLifetime
         return port;
     }
 
-    private Uri ServerUri => new Uri($"ws://localhost:{_port}/");
+    private Uri ServerUri => new($"ws://localhost:{_port}/");
 
     private static FrameWrenchClient NewClient() =>
-        new FrameWrenchClient(new FrameWrenchOptions
+        new(new FrameWrenchOptions
         {
             ConnectTimeout = TimeSpan.FromSeconds(10),
             PingTimeout = TimeSpan.FromSeconds(5),
@@ -256,5 +257,182 @@ public sealed class IntegrationTests : IAsyncLifetime
             client.SendFrameAsync(FrameOpCode.Text, new byte[] { 0xFF }, isFinal: true));
 
         await client.CloseAsync();
+    }
+
+    [Fact]
+    public async Task SendTextAsync_NullText_Throws_ArgumentNullException_WhenConnected()
+    {
+        await using var client = NewClient();
+        await client.ConnectAsync(ServerUri);
+
+        await Should.ThrowAsync<ArgumentNullException>(
+            () => client.SendTextAsync(null!));
+
+        await client.CloseAsync();
+    }
+
+    [Fact]
+    public async Task SendFrameAsync_NullFrame_Throws_ArgumentNullException_WhenConnected()
+    {
+        await using var client = NewClient();
+        await client.ConnectAsync(ServerUri);
+
+        await Should.ThrowAsync<ArgumentNullException>(
+            () => client.SendFrameAsync((WebSocketFrame)null!));
+
+        await client.CloseAsync();
+    }
+
+    [Fact]
+    public async Task PingAsync_PayloadOver125Bytes_Throws_ArgumentException()
+    {
+        await using var client = NewClient();
+        await client.ConnectAsync(ServerUri);
+
+        var oversized = new byte[126];
+        var ex = await Should.ThrowAsync<ArgumentException>(
+            () => client.PingAsync(payload: oversized));
+
+        ex.Message.ShouldContain("125");
+
+        await client.CloseAsync();
+    }
+
+    [Fact]
+    public async Task ReceiveMessageAsync_AfterClose_Throws_FrameWrenchException()
+    {
+        await using var client = NewClient();
+        await client.ConnectAsync(ServerUri);
+        await client.CloseAsync();
+
+        await Should.ThrowAsync<FrameWrenchException>(
+            () => client.ReceiveMessageAsync());
+    }
+
+    [Fact]
+    public async Task ReceiveMessageAsync_MaxMessagePayloadExceeded_Throws()
+    {
+        var options = new FrameWrenchOptions
+        {
+            ConnectTimeout = TimeSpan.FromSeconds(10),
+            MaxMessagePayloadBytes = 3,
+        };
+
+        await using var client = new FrameWrenchClient(options);
+        await client.ConnectAsync(ServerUri);
+
+        await client.SendTextAsync("Hello");
+
+        await Should.ThrowAsync<WebSocketProtocolException>(
+            () => client.ReceiveMessageAsync());
+    }
+
+    [Fact]
+    public async Task Dispose_WhenOpen_TransitionsStateToNonOpen()
+    {
+        var client = NewClient();
+        await client.ConnectAsync(ServerUri);
+
+        client.Dispose();
+
+        client.State.ShouldNotBe(WebSocketState.Open);
+        client.State.ShouldNotBe(WebSocketState.None);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WhenOpen_TransitionsStateToNonOpen()
+    {
+        var client = NewClient();
+        await client.ConnectAsync(ServerUri);
+
+        await client.DisposeAsync();
+
+        client.State.ShouldNotBe(WebSocketState.Open);
+        client.State.ShouldNotBe(WebSocketState.None);
+    }
+
+    [Fact]
+    public async Task State_IsOpen_AfterSuccessfulConnect()
+    {
+        await using var client = NewClient();
+        await client.ConnectAsync(ServerUri);
+        client.State.ShouldBe(global::FrameWrench.Core.WebSocketState.Open);
+        await client.CloseAsync();
+    }
+
+    [Fact]
+    public async Task SendBinaryAsync_EmptyPayload_EchoedBack()
+    {
+        await using var client = NewClient();
+        await client.ConnectAsync(ServerUri);
+
+        await client.SendBinaryAsync(ReadOnlyMemory<byte>.Empty);
+        var response = await client.ReceiveMessageAsync();
+
+        response.MessageType.ShouldBe(FrameOpCode.Binary);
+        response.Payload.Length.ShouldBe(0);
+
+        await client.CloseAsync();
+    }
+
+    [Fact]
+    public async Task SendTextAsync_UnicodeText_EchoedBack()
+    {
+        await using var client = NewClient();
+        await client.ConnectAsync(ServerUri);
+
+        const string text = "こんにちは世界";
+        await client.SendTextAsync(text);
+        var response = await client.ReceiveMessageAsync();
+
+        response.MessageType.ShouldBe(FrameOpCode.Text);
+        response.GetText().ShouldBe(text);
+
+        await client.CloseAsync();
+    }
+
+    [Fact]
+    public async Task ReceiveMessageAsync_MultipleMessages_InOrder()
+    {
+        await using var client = NewClient();
+        await client.ConnectAsync(ServerUri);
+
+        await client.SendTextAsync("first");
+        await client.SendTextAsync("second");
+        await client.SendTextAsync("third");
+
+        var m1 = await client.ReceiveMessageAsync();
+        var m2 = await client.ReceiveMessageAsync();
+        var m3 = await client.ReceiveMessageAsync();
+
+        m1.GetText().ShouldBe("first");
+        m2.GetText().ShouldBe("second");
+        m3.GetText().ShouldBe("third");
+
+        await client.CloseAsync();
+    }
+
+    [Fact]
+    public async Task CloseAsync_CustomStatus_TransitionsStateToNonOpen()
+    {
+        await using var client = NewClient();
+        await client.ConnectAsync(ServerUri);
+
+        await client.CloseAsync(
+            global::FrameWrench.Core.WebSocketCloseStatus.GoingAway,
+            "shutting down");
+
+        client.State.ShouldNotBe(global::FrameWrench.Core.WebSocketState.Open);
+    }
+
+    [Fact]
+    public async Task CloseAsync_CalledTwice_DoesNotThrow()
+    {
+        await using var client = NewClient();
+        await client.ConnectAsync(ServerUri);
+
+        await client.CloseAsync();
+
+        await Should.NotThrowAsync(() => client.CloseAsync());
     }
 }

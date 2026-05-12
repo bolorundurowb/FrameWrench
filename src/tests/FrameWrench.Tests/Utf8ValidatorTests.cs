@@ -101,14 +101,12 @@ public class Utf8ValidatorTests
     [Fact]
     public void ThrowIfInvalidUtf8_ThreeByteScalar_IsValid()
     {
-        // U+20AC (Euro sign) encodes to 0xE2 0x82 0xAC in UTF-8
         Utf8Validator.ThrowIfInvalidUtf8([0xE2, 0x82, 0xAC]);
     }
 
     [Fact]
     public void ThrowIfInvalidUtf8_EmbeddedNullByte_IsValid()
     {
-        // A null byte (0x00) is valid UTF-8
         Utf8Validator.ThrowIfInvalidUtf8([(byte)'A', 0x00, (byte)'B']);
     }
 }

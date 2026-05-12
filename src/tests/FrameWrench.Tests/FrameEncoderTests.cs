@@ -165,7 +165,6 @@ public class FrameEncoderTests
     [Fact]
     public async Task CloseFrame_NoReason_TotalLengthIsHeaderPlusTwoBytes()
     {
-        // A close with no reason should produce 2-byte header + 2-byte status = 4 bytes
         var bytes = await EncodeAsync(WebSocketFrame.Close(WebSocketCloseStatus.NormalClosure));
         bytes.Length.ShouldBe(2 + 2, "header(2) + status(2) only when no reason supplied");
         BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(2, 2))
