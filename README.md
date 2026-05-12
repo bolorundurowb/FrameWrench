@@ -126,6 +126,8 @@ Open `src/FrameWrench.slnx` in Visual Studio 2022 17.10+. Older versions can ope
 
 ## Quick Start
 
+Use one `FrameWrenchClient` per WebSocket connection; after a close, create a new instance to reconnect (unlike `HttpClient`, instances are not pooled for reuse).
+
 Public echo WebSocket URLs change over time; verify the host or use a local server (see integration tests and the sample) before relying on a specific address.
 
 ```csharp
@@ -423,6 +425,7 @@ All FrameWrench exceptions derive from `FrameWrenchException`:
 | Exception | When |
 |---|---|
 | `WebSocketHandshakeException` | HTTP upgrade failed, non-101 status, bad `Sec-WebSocket-Accept` |
+| `WebSocketClosedByPeerException` | Server sent a Close frame read via `ReceiveMessageAsync` (includes `CloseStatus` and `CloseReason`; use `ReceiveFrameAsync` if you need the raw Close frame) |
 | `WebSocketProtocolException` | RFC 6455 violation: reserved opcode, masked server frame, oversized control frame, fragmented control frame |
 | `WebSocketStateException` | Operation attempted in wrong state (e.g., send after close) |
 | `EndOfStreamException` | Server closed the TCP connection mid-frame |

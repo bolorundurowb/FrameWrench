@@ -25,6 +25,7 @@ internal static class Utf8Validator
 
         try
         {
+            // Encoding.GetString(ReadOnlySpan<byte>) is unavailable on netstandard2.0; copy once.
             _ = StrictUtf8.GetString(utf8Bytes.ToArray());
         }
         catch (Exception ex) when (ex is ArgumentException or DecoderFallbackException)

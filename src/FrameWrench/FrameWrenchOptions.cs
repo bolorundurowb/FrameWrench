@@ -18,6 +18,12 @@ public sealed class FrameWrenchOptions
     /// Additional HTTP headers sent in the Upgrade request (e.g., <c>Authorization</c>,
     /// <c>Origin</c>).  Keys and values must be valid HTTP header names/values.
     /// </summary>
+    /// <remarks>
+    /// Treat the assigned collection as owned by this options instance (or a single client).
+    /// Do not share the same dictionary across multiple concurrent connections unless you
+    /// snapshot it yourself; <see cref="FrameWrenchClient.ConnectAsync(Uri, CancellationToken)"/>
+    /// copies entries at connect time for the handshake only.
+    /// </remarks>
     public IDictionary<string, string> ExtraHeaders { get; set; } =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -25,12 +31,22 @@ public sealed class FrameWrenchOptions
     /// Sub-protocols to advertise in the <c>Sec-WebSocket-Protocol</c> request header.
     /// Leave empty to advertise no sub-protocol.
     /// </summary>
+    /// <remarks>
+    /// Same ownership guidance as <see cref="ExtraHeaders"/> — avoid mutating a list shared
+    /// across unrelated clients while connections are in flight.
+    /// </remarks>
     public IList<string> SubProtocols { get; set; } = new List<string>();
 
     /// <summary>
     /// TLS protocols to allow for <c>wss://</c> connections.
-    /// Default: <see cref="SslProtocols.None"/> (lets the OS choose, typically TLS 1.2/1.3).
+    /// Default: <see cref="SslProtocols.None"/>.
     /// </summary>
+    /// <remarks>
+    /// On <c>net462</c>, <c>net48</c>, and <c>netstandard2.0</c>, the <see cref="SslStream"/> client-authentication
+    /// overload used by <see cref="FrameWrenchClient"/> does not accept <see cref="SslProtocols.None"/>; the client
+    /// falls back to <see cref="SslProtocols.Tls12"/> when None is configured. On newer runtimes with overloads
+    /// that accept None, the operating system negotiates protocols as usual.
+    /// </remarks>
     public SslProtocols SslProtocols { get; set; } = SslProtocols.None;
 
     /// <summary>

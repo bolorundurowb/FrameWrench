@@ -40,6 +40,13 @@ public class Utf8ValidatorTests
     }
 
     [Fact]
+    public void ThrowIfInvalidUtf8_Lone0xFF_Throws()
+    {
+        Should.Throw<WebSocketProtocolException>(() =>
+            Utf8Validator.ThrowIfInvalidUtf8(new byte[] { 0xFF }));
+    }
+
+    [Fact]
     public void ThrowIfInvalidUtf8_TruncatedSequence_Throws()
     {
         Should.Throw<WebSocketProtocolException>(() =>

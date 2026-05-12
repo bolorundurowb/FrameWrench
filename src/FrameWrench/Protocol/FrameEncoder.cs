@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Security.Cryptography;
 using FrameWrench.Core;
 
 namespace FrameWrench.Protocol;
@@ -28,6 +29,9 @@ namespace FrameWrench.Protocol;
 /// </remarks>
 internal static class FrameEncoder
 {
+    /// <summary>Shared RNG for masking keys; thread-safe for <see cref="RandomNumberGenerator.GetBytes(byte[])"/>.</summary>
+    private static readonly RandomNumberGenerator s_maskKeyRng = RandomNumberGenerator.Create();
+
     /// <summary>
     /// Encodes <paramref name="frame"/> and writes it to <paramref name="stream"/>.
     /// </summary>
@@ -137,9 +141,7 @@ internal static class FrameEncoder
     private static byte[] GenerateMaskKey()
     {
         var key = new byte[4];
-        using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
-            rng.GetBytes(key);
-
+        s_maskKeyRng.GetBytes(key);
         return key;
     }
 }

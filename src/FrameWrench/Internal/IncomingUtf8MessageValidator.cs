@@ -110,8 +110,11 @@ internal sealed class IncomingUtf8MessageValidator
 
     private static void AppendPayload(List<byte> list, ReadOnlyMemory<byte> payload)
     {
-        var span = payload.Span;
-        for (int i = 0; i < span.Length; i++)
-            list.Add(span[i]);
+        if (payload.IsEmpty)
+            return;
+
+        // netstandard2.0 has no List<byte>.AddRange(ReadOnlySpan<byte>); one array + bulk add
+        // beats per-byte Add for large fragmented text payloads.
+        list.AddRange(payload.ToArray());
     }
 }

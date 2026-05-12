@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Authentication;
+using System.Threading;
 using System.Threading.Channels;
 using FrameWrench.Core;
 using FrameWrench.Internal;
@@ -14,6 +15,8 @@ namespace FrameWrench;
 /// <summary>
 /// A lightweight, client-only RFC 6455 WebSocket implementation that exposes
 /// explicit frame-level control over Ping, Pong, and all other frame types.
+/// Each instance supports at most one successful <see cref="ConnectAsync(Uri, CancellationToken)"/> —
+/// create a new client to open another connection.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -72,6 +75,8 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 
     private Task? _pumpTask;
     private CancellationTokenSource? _pumpCts;
+
+    private int _cleanupEntered;
 
     /// <summary>
     /// Maps Pong payload (Base64 of echoed application data) to FIFO waiters so concurrent
@@ -351,7 +356,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         }
         catch (ChannelClosedException ex)
         {
-            if (ex.InnerException is WebSocketProtocolException wsp)
+            if (TryUnwrapWebSocketProtocolException(ex) is { } wsp)
                 throw wsp;
 
             throw new FrameWrenchException(
@@ -381,6 +386,9 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     /// </summary>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A <see cref="WebSocketMessage"/> containing the full payload.</returns>
+    /// <exception cref="WebSocketClosedByPeerException">
+    /// Thrown when a Close frame is received (including between fragments of a message).
+    /// </exception>
     public async Task<WebSocketMessage> ReceiveMessageAsync(CancellationToken ct = default)
     {
         var fragments = new List<WebSocketFrame>();
@@ -390,6 +398,12 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         while (true)
         {
             var frame = await ReceiveFrameAsync(ct).ConfigureAwait(false);
+
+            if (frame.OpCode == FrameOpCode.Close)
+            {
+                frame.GetCloseData(out var closeStatus, out var closeReason);
+                throw new WebSocketClosedByPeerException(closeStatus, closeReason);
+            }
 
             if (frame.IsControl) continue;
 
@@ -705,8 +719,23 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
                 $"{caller} requires an open connection (current state: {_state}).");
     }
 
+    private static WebSocketProtocolException? TryUnwrapWebSocketProtocolException(
+        Exception ex)
+    {
+        for (var e = ex; e is not null; e = e.InnerException)
+        {
+            if (e is WebSocketProtocolException wsp)
+                return wsp;
+        }
+
+        return null;
+    }
+
     private void CleanUp()
     {
+        if (Interlocked.Exchange(ref _cleanupEntered, 1) != 0)
+            return;
+
         _incomingUtf8Validator.Reset();
 
         try { _autoPingCts?.Cancel(); } catch { }

@@ -40,8 +40,9 @@ FrameWrench/
 │           ├── FrameDecoderTests.cs     # Decoder unit tests (all opcodes + lengths)
 │           ├── HandshakeHelperTests.cs  # Handshake unit tests (RFC vector)
 │           ├── WebSocketFrameTests.cs   # Frame model tests
-│           └── IntegrationTests.cs      # End-to-end tests vs in-process echo server
-│
+│           ├── IntegrationTests.cs      # End-to-end tests vs in-process echo server
+│           ├── Utf8ValidatorTests.cs    # UTF-8 / Close reason validation
+│           └── IncomingUtf8MessageValidatorTests.cs
 └── samples/
     └── FrameWrench.Example/
         ├── FrameWrench.Example.csproj
