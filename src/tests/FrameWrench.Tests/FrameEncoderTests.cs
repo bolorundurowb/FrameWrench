@@ -161,4 +161,38 @@ public class FrameEncoderTests
         BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(2, 2))
             .ShouldBe((ushort)WebSocketCloseStatus.GoingAway);
     }
+
+    [Fact]
+    public async Task CloseFrame_NoReason_TotalLengthIsHeaderPlusTwoBytes()
+    {
+        // A close with no reason should produce 2-byte header + 2-byte status = 4 bytes
+        var bytes = await EncodeAsync(WebSocketFrame.Close(WebSocketCloseStatus.NormalClosure));
+        bytes.Length.ShouldBe(2 + 2, "header(2) + status(2) only when no reason supplied");
+        BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(2, 2))
+            .ShouldBe((ushort)WebSocketCloseStatus.NormalClosure);
+    }
+
+    [Fact]
+    public async Task PingFrame_EmptyPayload_CorrectOpcode()
+    {
+        var bytes = await EncodeAsync(WebSocketFrame.Ping());
+        bytes[0].ShouldBe((byte)0x89, "FIN(1) + Ping opcode(0x9)");
+        (bytes[1] & 0x7F).ShouldBe(0, "empty payload");
+    }
+
+    [Fact]
+    public async Task PongFrame_EmptyPayload_CorrectOpcode()
+    {
+        var bytes = await EncodeAsync(WebSocketFrame.Pong());
+        bytes[0].ShouldBe((byte)0x8A, "FIN(1) + Pong opcode(0xA)");
+        (bytes[1] & 0x7F).ShouldBe(0, "empty payload");
+    }
+
+    [Fact]
+    public async Task PingFrame_WithPayload_PayloadRoundTrips()
+    {
+        var payload = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF };
+        var bytes = await EncodeAsync(WebSocketFrame.Ping(payload), masked: false);
+        bytes.AsSpan(2).ToArray().ShouldBe(payload);
+    }
 }

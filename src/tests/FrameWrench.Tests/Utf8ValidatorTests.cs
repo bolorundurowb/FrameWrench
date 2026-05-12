@@ -36,28 +36,28 @@ public class Utf8ValidatorTests
     public void ThrowIfInvalidUtf8_LoneContinuationByte_Throws()
     {
         Should.Throw<WebSocketProtocolException>(() =>
-            Utf8Validator.ThrowIfInvalidUtf8(new byte[] { 0x80 }));
+            Utf8Validator.ThrowIfInvalidUtf8([0x80]));
     }
 
     [Fact]
     public void ThrowIfInvalidUtf8_Lone0xFF_Throws()
     {
         Should.Throw<WebSocketProtocolException>(() =>
-            Utf8Validator.ThrowIfInvalidUtf8(new byte[] { 0xFF }));
+            Utf8Validator.ThrowIfInvalidUtf8([0xFF]));
     }
 
     [Fact]
     public void ThrowIfInvalidUtf8_TruncatedSequence_Throws()
     {
         Should.Throw<WebSocketProtocolException>(() =>
-            Utf8Validator.ThrowIfInvalidUtf8(new byte[] { 0xE2, 0x82 }));
+            Utf8Validator.ThrowIfInvalidUtf8([0xE2, 0x82]));
     }
 
     [Fact]
     public void ThrowIfInvalidUtf8_OverlongEncoding_Throws()
     {
         Should.Throw<WebSocketProtocolException>(() =>
-            Utf8Validator.ThrowIfInvalidUtf8(new byte[] { 0xF0, 0x80, 0x80, 0xAF }));
+            Utf8Validator.ThrowIfInvalidUtf8([0xF0, 0x80, 0x80, 0xAF]));
     }
 
     [Fact]
@@ -84,5 +84,31 @@ public class Utf8ValidatorTests
         var payload = new byte[] { 0x03, 0xE8, 0xFF, 0xFF };
         Should.Throw<WebSocketProtocolException>(() =>
             Utf8Validator.ThrowIfInvalidCloseReason(payload));
+    }
+
+    [Fact]
+    public void ThrowIfInvalidCloseReason_ZeroBytePayload_DoesNotThrow()
+    {
+        Utf8Validator.ThrowIfInvalidCloseReason(ReadOnlyMemory<byte>.Empty);
+    }
+
+    [Fact]
+    public void ThrowIfInvalidCloseReason_OneBytePayload_DoesNotThrow()
+    {
+        Utf8Validator.ThrowIfInvalidCloseReason(new byte[] { 0x03 });
+    }
+
+    [Fact]
+    public void ThrowIfInvalidUtf8_ThreeByteScalar_IsValid()
+    {
+        // U+20AC (Euro sign) encodes to 0xE2 0x82 0xAC in UTF-8
+        Utf8Validator.ThrowIfInvalidUtf8([0xE2, 0x82, 0xAC]);
+    }
+
+    [Fact]
+    public void ThrowIfInvalidUtf8_EmbeddedNullByte_IsValid()
+    {
+        // A null byte (0x00) is valid UTF-8
+        Utf8Validator.ThrowIfInvalidUtf8([(byte)'A', 0x00, (byte)'B']);
     }
 }

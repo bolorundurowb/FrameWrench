@@ -106,4 +106,79 @@ public class WebSocketFrameTests
         const string msg = "こんにちは";
         WebSocketFrame.Text(msg).GetTextPayload().ShouldBe(msg);
     }
+
+    [Fact]
+    public void Text_EmptyString_HasEmptyPayload()
+    {
+        var frame = WebSocketFrame.Text(string.Empty);
+        frame.OpCode.ShouldBe(FrameOpCode.Text);
+        frame.Payload.Length.ShouldBe(0);
+        frame.GetTextPayload().ShouldBe(string.Empty);
+    }
+
+    [Fact]
+    public void Binary_Fragment_HasFINFalse()
+    {
+        var frame = WebSocketFrame.Binary(new byte[] { 1, 2 }, isFinal: false);
+        frame.IsFinal.ShouldBeFalse();
+        frame.OpCode.ShouldBe(FrameOpCode.Binary);
+    }
+
+    [Fact]
+    public void Continuation_Fragment_HasFINFalse()
+    {
+        var frame = WebSocketFrame.Continuation(new byte[] { 0x01 }, isFinal: false);
+        frame.IsFinal.ShouldBeFalse();
+        frame.OpCode.ShouldBe(FrameOpCode.Continuation);
+    }
+
+    [Fact]
+    public void Ping_NoPayload_HasEmptyPayload()
+    {
+        var frame = WebSocketFrame.Ping();
+        frame.Payload.IsEmpty.ShouldBeTrue();
+        frame.IsFinal.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Pong_NoPayload_HasEmptyPayload()
+    {
+        var frame = WebSocketFrame.Pong();
+        frame.Payload.IsEmpty.ShouldBeTrue();
+        frame.IsFinal.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Close_NullReason_GetCloseData_ReturnsEmptyReason()
+    {
+        var frame = WebSocketFrame.Close(WebSocketCloseStatus.NormalClosure, null);
+        frame.GetCloseData(out var status, out var reason);
+        status.ShouldBe(WebSocketCloseStatus.NormalClosure);
+        reason.ShouldBe(string.Empty);
+    }
+
+    [Fact]
+    public void GetCloseData_OneBytePayload_ReturnsNullStatus()
+    {
+        var frame = new WebSocketFrame(FrameOpCode.Close, true, new byte[] { 0x03 });
+        frame.GetCloseData(out var status, out var reason);
+        status.ShouldBeNull();
+        reason.ShouldBe(string.Empty);
+    }
+
+    [Fact]
+    public void ToString_ContainsOpCodeAndLength()
+    {
+        var frame = WebSocketFrame.Text("hi");
+        var str = frame.ToString();
+        str.ShouldContain("Text");
+        str.ShouldContain("len=2");
+    }
+
+    [Fact]
+    public void ToString_Fragment_ContainsFragmentLabel()
+    {
+        var frame = WebSocketFrame.Text("part", isFinal: false);
+        frame.ToString().ShouldContain("fragment");
+    }
 }

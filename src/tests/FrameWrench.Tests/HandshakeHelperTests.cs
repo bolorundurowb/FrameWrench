@@ -142,6 +142,77 @@ public class HandshakeHelperTests
     {
         await Should.ThrowAsync<WebSocketHandshakeException>(
             () => HandshakeHelper.ValidateResponseAsync(
-                new MemoryStream(Array.Empty<byte>()), "any", CancellationToken.None));
+                new MemoryStream([]), "any", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ValidateResponse_MissingConnectionHeader_Throws()
+    {
+        const string accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
+        var response =
+            "HTTP/1.1 101 Switching Protocols\r\n" +
+            "Upgrade: websocket\r\n" +
+            $"Sec-WebSocket-Accept: {accept}\r\n" +
+            "\r\n";
+
+        await Should.ThrowAsync<WebSocketHandshakeException>(
+            () => HandshakeHelper.ValidateResponseAsync(
+                ResponseStream(response), accept, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ValidateResponse_ConnectionHeaderWithoutUpgrade_Throws()
+    {
+        const string accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
+        var response =
+            "HTTP/1.1 101 Switching Protocols\r\n" +
+            "Upgrade: websocket\r\n" +
+            "Connection: keep-alive\r\n" +
+            $"Sec-WebSocket-Accept: {accept}\r\n" +
+            "\r\n";
+
+        await Should.ThrowAsync<WebSocketHandshakeException>(
+            () => HandshakeHelper.ValidateResponseAsync(
+                ResponseStream(response), accept, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ValidateResponse_UpgradeHeaderWrongValue_Throws()
+    {
+        const string accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
+        var response =
+            "HTTP/1.1 101 Switching Protocols\r\n" +
+            "Upgrade: http\r\n" +
+            "Connection: Upgrade\r\n" +
+            $"Sec-WebSocket-Accept: {accept}\r\n" +
+            "\r\n";
+
+        await Should.ThrowAsync<WebSocketHandshakeException>(
+            () => HandshakeHelper.ValidateResponseAsync(
+                ResponseStream(response), accept, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ValidateResponse_HTTP10_101_Passes()
+    {
+        const string accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
+        var response =
+            "HTTP/1.0 101 Switching Protocols\r\n" +
+            "Upgrade: websocket\r\n" +
+            "Connection: Upgrade\r\n" +
+            $"Sec-WebSocket-Accept: {accept}\r\n" +
+            "\r\n";
+
+        await Should.NotThrowAsync(
+            () => HandshakeHelper.ValidateResponseAsync(
+                ResponseStream(response), accept, CancellationToken.None));
+    }
+
+    [Fact]
+    public void ComputeAcceptValue_DifferentKeys_ProduceDifferentValues()
+    {
+        var a = HandshakeHelper.ComputeAcceptValue("AAAAAAAAAAAAAAAAAAAAAA==");
+        var b = HandshakeHelper.ComputeAcceptValue("BBBBBBBBBBBBBBBBBBBBBB==");
+        a.ShouldNotBe(b);
     }
 }

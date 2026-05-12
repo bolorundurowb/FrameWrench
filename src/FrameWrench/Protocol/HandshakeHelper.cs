@@ -109,7 +109,7 @@ internal static class HandshakeHelper
     {
         var headerBytes = await ReadHttpHeadersAsync(stream, ct).ConfigureAwait(false);
         var response = Encoding.ASCII.GetString(headerBytes);
-        var lines = response.Split(new[] { "\r\n" }, StringSplitOptions.None);
+        var lines = response.Split(["\r\n"], StringSplitOptions.None);
 
         if (lines.Length == 0)
             throw new WebSocketHandshakeException("Empty response from the server.", statusLine: null);

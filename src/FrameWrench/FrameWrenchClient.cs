@@ -287,7 +287,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         {
             if (!_pendingPings.TryGetValue(key, out var list))
             {
-                list = new List<PingWaiter>();
+                list = [];
                 _pendingPings[key] = list;
             }
 

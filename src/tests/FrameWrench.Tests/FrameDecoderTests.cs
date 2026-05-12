@@ -92,7 +92,7 @@ public class FrameDecoderTests
             () => Decode(BuildServerFrame(
                 FrameOpCode.Text,
                 true,
-                Array.Empty<byte>(),
+                [],
                 rsv1: rsv1,
                 rsv2: rsv2,
                 rsv3: rsv3)));
@@ -148,7 +148,7 @@ public class FrameDecoderTests
     [Fact]
     public async Task CloseFrame_EmptyPayload_ReturnsNullStatus()
     {
-        var frame = await Decode(BuildServerFrame(FrameOpCode.Close, true, Array.Empty<byte>()));
+        var frame = await Decode(BuildServerFrame(FrameOpCode.Close, true, []));
         frame.GetCloseData(out var status, out var reason);
         status.ShouldBeNull();
         reason.ShouldBeEmpty();
@@ -207,7 +207,7 @@ public class FrameDecoderTests
     public async Task TruncatedStream_Throws_EndOfStreamException()
     {
         await Should.ThrowAsync<EndOfStreamException>(
-            () => FrameDecoder.ReadFrameAsync(new MemoryStream(new byte[] { 0x81 })));
+            () => FrameDecoder.ReadFrameAsync(new MemoryStream([0x81])));
     }
 
     [Fact]
@@ -217,6 +217,64 @@ public class FrameDecoderTests
         var encoded = System.Text.Encoding.UTF8.GetBytes(msg);
         var frame = await Decode(BuildServerFrame(FrameOpCode.Text, true, encoded));
         frame.GetTextPayload().ShouldBe(msg);
+    }
+
+    [Fact]
+    public async Task SixtyFourBitLength_MsbSet_Throws_ProtocolException()
+    {
+        // Build a frame header: FIN|Binary, then 0x7F for 64-bit length, then 8 bytes with MSB set
+        using var ms = new MemoryStream();
+        ms.WriteByte(0x82);          // FIN + Binary
+        ms.WriteByte(0x7F);          // 64-bit extended length
+        ms.Write([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], 0, 8);
+        ms.Seek(0, SeekOrigin.Begin);
+
+        var ex = await Should.ThrowAsync<WebSocketProtocolException>(
+            () => FrameDecoder.ReadFrameAsync(ms));
+        ex.Message.ShouldContain("most-significant bit");
+    }
+
+    [Fact]
+    public async Task FragmentedCloseFrame_Throws_ProtocolException()
+    {
+        // Close frame with FIN bit cleared: byte0 = 0x08 (no FIN), byte1 = 0x00
+        var wire = new byte[] { 0x08, 0x00 };
+        var ex = await Should.ThrowAsync<WebSocketProtocolException>(
+            () => FrameDecoder.ReadFrameAsync(new MemoryStream(wire)));
+        ex.Message.ShouldContain("fragmented");
+    }
+
+    [Fact]
+    public async Task FragmentedPongFrame_Throws_ProtocolException()
+    {
+        // Pong frame with FIN bit cleared: byte0 = 0x0A (no FIN), byte1 = 0x00
+        var wire = new byte[] { 0x0A, 0x00 };
+        var ex = await Should.ThrowAsync<WebSocketProtocolException>(
+            () => FrameDecoder.ReadFrameAsync(new MemoryStream(wire)));
+        ex.Message.ShouldContain("fragmented");
+    }
+
+    [Fact]
+    public async Task CloseFrame_StatusCodeOnly_HasEmptyReason()
+    {
+        // Close frame with exactly 2-byte payload (status only, no reason string)
+        var payload = new byte[2];
+        BinaryPrimitives.WriteUInt16BigEndian(payload, (ushort)WebSocketCloseStatus.NormalClosure);
+
+        var frame = await Decode(BuildServerFrame(FrameOpCode.Close, true, payload));
+        frame.GetCloseData(out var status, out var reason);
+
+        status.ShouldBe(WebSocketCloseStatus.NormalClosure);
+        reason.ShouldBe(string.Empty);
+    }
+
+    [Fact]
+    public async Task CloseFrame_OneBytePayload_ReturnsNullStatus()
+    {
+        var frame = await Decode(BuildServerFrame(FrameOpCode.Close, true, [0x03]));
+        frame.GetCloseData(out var status, out var reason);
+        status.ShouldBeNull();
+        reason.ShouldBe(string.Empty);
     }
 
     [Theory]

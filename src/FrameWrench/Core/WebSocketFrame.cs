@@ -174,7 +174,7 @@ public sealed class WebSocketFrame
     {
         var reasonBytes = reason is { Length: > 0 }
             ? Encoding.UTF8.GetBytes(reason)
-            : Array.Empty<byte>();
+            : [];
 
         var payload = new byte[2 + reasonBytes.Length];
         var code = (ushort)status;

@@ -31,7 +31,7 @@ public class IncomingUtf8MessageValidatorTests
     {
         var v = new IncomingUtf8MessageValidator();
         Should.Throw<WebSocketProtocolException>(() =>
-            v.OnDataFrame(T(new byte[] { 0xFF, 0xFE })));
+            v.OnDataFrame(T([0xFF, 0xFE])));
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public class IncomingUtf8MessageValidatorTests
         var v = new IncomingUtf8MessageValidator();
         v.OnDataFrame(T(U("hel"), fin: false));
         Should.Throw<WebSocketProtocolException>(() =>
-            v.OnDataFrame(C(new byte[] { 0xFF }, fin: true)));
+            v.OnDataFrame(C([0xFF], fin: true)));
     }
 
     [Fact]
@@ -74,14 +74,14 @@ public class IncomingUtf8MessageValidatorTests
         var v = new IncomingUtf8MessageValidator();
         v.OnDataFrame(T(U("a"), fin: false));
         Should.Throw<WebSocketProtocolException>(() =>
-            v.OnDataFrame(B(new byte[] { 1 }, fin: true)));
+            v.OnDataFrame(B([1], fin: true)));
     }
 
     [Fact]
     public void TextWhileFragmentedBinary_Throws()
     {
         var v = new IncomingUtf8MessageValidator();
-        v.OnDataFrame(B(new byte[] { 1 }, fin: false));
+        v.OnDataFrame(B([1], fin: false));
         Should.Throw<WebSocketProtocolException>(() =>
             v.OnDataFrame(T(U("x"), fin: true)));
     }
@@ -90,8 +90,8 @@ public class IncomingUtf8MessageValidatorTests
     public void FragmentedBinary_DoesNotThrow()
     {
         var v = new IncomingUtf8MessageValidator();
-        v.OnDataFrame(B(new byte[] { 1, 2 }, fin: false));
-        v.OnDataFrame(C(new byte[] { 3 }, fin: true));
+        v.OnDataFrame(B([1, 2], fin: false));
+        v.OnDataFrame(C([3], fin: true));
     }
 
     [Fact]
@@ -109,5 +109,69 @@ public class IncomingUtf8MessageValidatorTests
         var v = new IncomingUtf8MessageValidator();
         Should.Throw<WebSocketProtocolException>(() =>
             v.OnDataFrame(new WebSocketFrame(FrameOpCode.Close, true, new byte[] { 0x03, 0xE8 })));
+    }
+
+    [Fact]
+    public void SingleFinalBinaryFrame_DoesNotThrow()
+    {
+        var v = new IncomingUtf8MessageValidator();
+        v.OnDataFrame(B([0xDE, 0xAD, 0xBE, 0xEF]));
+    }
+
+    [Fact]
+    public void BinaryWhileFragmentedBinary_Throws()
+    {
+        var v = new IncomingUtf8MessageValidator();
+        v.OnDataFrame(B([1, 2], fin: false));
+        Should.Throw<WebSocketProtocolException>(() =>
+            v.OnDataFrame(B([3, 4], fin: true)));
+    }
+
+    [Fact]
+    public void Reset_ClearsBinaryFragmentState()
+    {
+        var v = new IncomingUtf8MessageValidator();
+        v.OnDataFrame(B([1], fin: false));
+        v.Reset();
+        // After reset, starting a new binary message should not throw
+        v.OnDataFrame(B([2], fin: true));
+    }
+
+    [Fact]
+    public void MultipleIntermediateContinuations_ForText_DoesNotThrow()
+    {
+        var v = new IncomingUtf8MessageValidator();
+        v.OnDataFrame(T(U("hel"), fin: false));
+        v.OnDataFrame(C(U("lo"), fin: false));
+        v.OnDataFrame(C(U(" wo"), fin: false));
+        v.OnDataFrame(C(U("rld"), fin: true));
+    }
+
+    [Fact]
+    public void MultipleIntermediateContinuations_ForBinary_DoesNotThrow()
+    {
+        var v = new IncomingUtf8MessageValidator();
+        v.OnDataFrame(B([1], fin: false));
+        v.OnDataFrame(C([2], fin: false));
+        v.OnDataFrame(C([3], fin: false));
+        v.OnDataFrame(C([4], fin: true));
+    }
+
+    [Fact]
+    public void AfterCompleteMessage_CanReceiveNextMessage()
+    {
+        var v = new IncomingUtf8MessageValidator();
+        v.OnDataFrame(T(U("first"), fin: true));
+        v.OnDataFrame(T(U("second"), fin: true));
+    }
+
+    [Fact]
+    public void AfterCompleteFragmentedText_CanReceiveNextMessage()
+    {
+        var v = new IncomingUtf8MessageValidator();
+        v.OnDataFrame(T(U("hel"), fin: false));
+        v.OnDataFrame(C(U("lo"), fin: true));
+        // should be able to start a new text message after fragmented one completes
+        v.OnDataFrame(T(U("next"), fin: true));
     }
 }

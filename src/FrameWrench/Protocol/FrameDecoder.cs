@@ -123,7 +123,7 @@ internal static class FrameDecoder
         int length,
         CancellationToken ct)
     {
-        if (length == 0) return Array.Empty<byte>();
+        if (length == 0) return [];
 
         var rented = ArrayPool<byte>.Shared.Rent(length);
         try
