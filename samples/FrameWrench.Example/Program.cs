@@ -1,5 +1,3 @@
-using System.Globalization;
-using FrameWrench;
 using FrameWrench.Core;
 
 namespace FrameWrench.Example;
