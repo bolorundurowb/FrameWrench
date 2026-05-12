@@ -21,8 +21,6 @@ public class WebSocketMessageTests
         return new WebSocketMessage(FrameOpCode.Binary, payload, [frame]);
     }
 
-    // ── MessageType ───────────────────────────────────────────────────────────
-
     [Fact]
     public void MessageType_Text_IsPreserved()
     {
@@ -34,8 +32,6 @@ public class WebSocketMessageTests
     {
         MakeBinary([1, 2, 3]).MessageType.ShouldBe(FrameOpCode.Binary);
     }
-
-    // ── Payload ───────────────────────────────────────────────────────────────
 
     [Fact]
     public void Payload_MatchesSuppliedData()
@@ -49,8 +45,6 @@ public class WebSocketMessageTests
     {
         MakeBinary([]).Payload.Length.ShouldBe(0);
     }
-
-    // ── GetText ───────────────────────────────────────────────────────────────
 
     [Fact]
     public void GetText_DecodesAscii()
@@ -70,8 +64,6 @@ public class WebSocketMessageTests
     {
         MakeText(string.Empty).GetText().ShouldBe(string.Empty);
     }
-
-    // ── Frames ────────────────────────────────────────────────────────────────
 
     [Fact]
     public void Frames_SingleFrame_HasCountOne()
@@ -109,8 +101,6 @@ public class WebSocketMessageTests
         msg.GetText().ShouldBe("Hello, World!");
         msg.Payload.Length.ShouldBe(Encoding.UTF8.GetByteCount("Hello, World!"));
     }
-
-    // ── ToString ──────────────────────────────────────────────────────────────
 
     [Fact]
     public void ToString_ContainsMessageType()
