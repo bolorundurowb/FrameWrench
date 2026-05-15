@@ -4,7 +4,7 @@
 
 **A lightweight, client-only RFC 6455 WebSocket library for .NET Framework 4.6.2+, .NET Framework 4.8, and .NET Standard 2.0.**
 
-FrameWrench gives you *explicit, frame-level control* over every WebSocket interaction - including raw Ping/Pong handling, fragmented messages, and direct access to individual frames - while still offering a convenient message-level API when you don't need that control.
+FrameWrench gives you *explicit, frame-level control* over every WebSocket interaction – including raw Ping/Pong handling, fragmented messages, and direct access to individual frames - while still offering a convenient message-level API when you don't need that control.
 
 > ⚠️ **AI Disclosure:** This project was developed with the assistance of generative AI. All code, architecture decisions, and documentation were reviewed and refined as part of the development process.
 
@@ -36,22 +36,36 @@ As of early 2025 there is no maintained, open-source WebSocket *client* library 
 
 FrameWrench fills this gap: a clean, minimal, fully RFC 6455-compliant *client* library that treats frames as first-class citizens.
 
+### Who Needs FrameWrench?
+
+- Legacy .NET Framework 4.6.2/4.8 applications requiring frame-level WebSocket control
+- Real-time latency measurement via explicit Ping/Pong with correlation
+- Custom message fragmentation logic (e.g., implementing a proprietary streaming protocol on top of WebSockets)
+- Low-level protocol implementations (e.g., building a custom trading system, game server, or telemetry pipeline)
+
+### Who Doesn't Need It?
+
+- **Modern .NET 6+ applications** → use built-in `ClientWebSocket` or higher-level libraries (SignalR, gRPC)
+- **Message-oriented applications** → SignalR, Blazor, or WebSocket libraries with message-level APIs
+- **Compression support needed** → alternative libraries with extension support
+- **Server implementations** → this is client-only; server use cases are out of scope
+
 
 ## Features
 
-| Feature | Detail |
-|---|---|
-| **Frame-level API** | Send and receive individual frames for all opcodes |
-| **Explicit Ping/Pong** | `PingAsync` with payload correlation and RTT measurement |
-| **Fragmented messages** | Send multi-frame messages; receive as individual frames or reassembled |
-| **Message-level API** | `ReceiveMessageAsync` / `SendTextAsync` / `SendBinaryAsync` for simple use cases |
-| **Async event model** | `FrameReceived` event fires for every incoming frame |
-| **Async streaming** | `GetFrameStream()` returns `IAsyncEnumerable<WebSocketFrame>` |
-| **TLS support** | Full `wss://` with configurable `SslProtocols` and cert validation callback |
-| **Auto-Ping (opt-in)** | Configurable keepalive via `FrameWrenchOptions.AutoPing` |
+| Feature                  | Detail                                                                                                                                                                                                                                     |
+|--------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Frame-level API**      | Send and receive individual frames for all opcodes                                                                                                                                                                                         |
+| **Explicit Ping/Pong**   | `PingAsync` with payload correlation and RTT measurement                                                                                                                                                                                   |
+| **Fragmented messages**  | Send multi-frame messages; receive as individual frames or reassembled                                                                                                                                                                     |
+| **Message-level API**    | `ReceiveMessageAsync` / `SendTextAsync` / `SendBinaryAsync` for simple use cases                                                                                                                                                           |
+| **Async event model**    | `FrameReceived` event fires for every incoming frame                                                                                                                                                                                       |
+| **Async streaming**      | `GetFrameStream()` returns `IAsyncEnumerable<WebSocketFrame>`                                                                                                                                                                              |
+| **TLS support**          | Full `wss://` with configurable `SslProtocols` and cert validation callback                                                                                                                                                                |
+| **Auto-Ping (opt-in)**   | Configurable keepalive via `FrameWrenchOptions.AutoPing`                                                                                                                                                                                   |
 | **Zero WS dependencies** | No WebSocket-specific NuGet packages; only Microsoft BCL shims (`System.Memory`, `System.Threading.Channels`, and others), with **per-target** direct dependencies so **net48** / **netstandard2.0** do not pull packages they do not need |
-| **Logger-agnostic** | No `ILogger` or logging package dependency - use NLog, Serilog, `Trace`, or your own wrappers around `FrameReceived` / exceptions |
-| **Target frameworks** | `net462`, `net48`, `netstandard2.0` |
+| **Logger-agnostic**      | No `ILogger` or logging package dependency - use NLog, Serilog, `Trace`, or your own wrappers around `FrameReceived` / exceptions                                                                                                          |
+| **Target frameworks**    | `net462`, `net48`, `netstandard2.0`                                                                                                                                                                                                        |
 
 
 ## Installation
@@ -411,24 +425,24 @@ var opts = new FrameWrenchOptions
 
 ## Thread Safety
 
-| Operation | Notes |
-|---|---|
-| **Sending frames** | Concurrent sends are serialised through an internal `SemaphoreSlim`. Multiple threads may call `SendFrameAsync` concurrently; frames are written atomically. |
-| **Receiving frames** | A single background pump reads frames from the wire. `ReceiveFrameAsync`, `GetFrameStream`, and `ReceiveMessageAsync` all read from an in-memory channel fed by the pump. Multiple concurrent calls to `ReceiveFrameAsync` are allowed but each frame is delivered to exactly one caller. If several tasks call `ReceiveMessageAsync` concurrently, logical message ordering is your responsibility. |
-| **FrameReceived event** | Fires on the pump thread. Keep handlers short and non-blocking. |
+| Operation               | Notes                                                                                                                                                                                                                                                                                                                                                                                                |
+|-------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Sending frames**      | Concurrent sends are serialised through an internal `SemaphoreSlim`. Multiple threads may call `SendFrameAsync` concurrently; frames are written atomically.                                                                                                                                                                                                                                         |
+| **Receiving frames**    | A single background pump reads frames from the wire. `ReceiveFrameAsync`, `GetFrameStream`, and `ReceiveMessageAsync` all read from an in-memory channel fed by the pump. Multiple concurrent calls to `ReceiveFrameAsync` are allowed but each frame is delivered to exactly one caller. If several tasks call `ReceiveMessageAsync` concurrently, logical message ordering is your responsibility. |
+| **FrameReceived event** | Fires on the pump thread. Keep handlers short and non-blocking.                                                                                                                                                                                                                                                                                                                                      |
 
 
 ## Error Handling
 
 All FrameWrench exceptions derive from `FrameWrenchException`:
 
-| Exception | When |
-|---|---|
-| `WebSocketHandshakeException` | HTTP upgrade failed, non-101 status, bad `Sec-WebSocket-Accept` |
+| Exception                        | When                                                                                                                                                         |
+|----------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `WebSocketHandshakeException`    | HTTP upgrade failed, non-101 status, bad `Sec-WebSocket-Accept`                                                                                              |
 | `WebSocketClosedByPeerException` | Server sent a Close frame read via `ReceiveMessageAsync` (includes `CloseStatus` and `CloseReason`; use `ReceiveFrameAsync` if you need the raw Close frame) |
-| `WebSocketProtocolException` | RFC 6455 violation: reserved opcode, masked server frame, oversized control frame, fragmented control frame |
-| `WebSocketStateException` | Operation attempted in wrong state (e.g., send after close) |
-| `EndOfStreamException` | Server closed the TCP connection mid-frame |
+| `WebSocketProtocolException`     | RFC 6455 violation: reserved opcode, masked server frame, oversized control frame, fragmented control frame                                                  |
+| `WebSocketStateException`        | Operation attempted in wrong state (e.g., send after close)                                                                                                  |
+| `EndOfStreamException`           | Server closed the TCP connection mid-frame                                                                                                                   |
 
 ```csharp
 try
@@ -449,15 +463,15 @@ catch (FrameWrenchException ex)
 }
 ```
 
-Prefer **`await client.DisposeAsync()`** (or `await using`) over **`Dispose()`** when a `SynchronizationContext` may be present (for example UI or legacy ASP.NET), because synchronous dispose can block while sending the close frame.
+Prefer **`await client.DisposeAsync()`** (or `await using`) over **`Dispose()`** when a `SynchronizationContext` may be present (for example, UI or legacy ASP.NET), because synchronous dispose can block while sending the close frame.
 
 
 ## Target Frameworks & Compatibility
 
-| Target | Runtime |
-|---|---|
-| `net462` | .NET Framework 4.6.2 on Windows |
-| `net48`  | .NET Framework 4.8 on Windows |
+| Target           | Runtime                                                       |
+|------------------|---------------------------------------------------------------|
+| `net462`         | .NET Framework 4.6.2 on Windows                               |
+| `net48`          | .NET Framework 4.8 on Windows                                 |
 | `netstandard2.0` | .NET Core 2.x, .NET Core 3.x, .NET 5, .NET 6, .NET 7, .NET 8+ |
 
 
