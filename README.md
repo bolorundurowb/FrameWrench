@@ -1,3 +1,9 @@
+<div align="center">
+  <img
+    src="https://raw.githubusercontent.com/bolorundurowb/FrameWrench/refs/heads/master/assets/frame-wrench-logo.png"
+    alt="omni assert logo"  />
+</div>
+
 # FrameWrench
 
 [![Build, Test & Coverage](https://github.com/bolorundurowb/FrameWrench/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/bolorundurowb/FrameWrench/actions/workflows/build-and-test.yml) [![codecov](https://codecov.io/gh/bolorundurowb/FrameWrench/graph/badge.svg?token=poFOTCdIj8)](https://codecov.io/gh/bolorundurowb/FrameWrench) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) ![NuGet Version](https://img.shields.io/nuget/v/FrameWrench)

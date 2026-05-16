@@ -24,6 +24,7 @@
     <RepositoryUrl>https://github.com/bolorundurowb/FrameWrench.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>frame-wrench-logo.png</PackageIcon>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <Title>Frame Wrench</Title>
     <PackageReleaseNotes>- Improve RFC compliance and add text validation</PackageReleaseNotes>
@@ -31,6 +32,7 @@
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\assets\frame-wrench-logo.png" Pack="true" PackagePath="\" />
     <InternalsVisibleTo Include="FrameWrench.Tests" />
   </ItemGroup>
 
