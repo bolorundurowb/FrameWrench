@@ -10,7 +10,7 @@
     <NeutralLanguage>en</NeutralLanguage>
     <RootNamespace>FrameWrench</RootNamespace>
     <AssemblyName>FrameWrench</AssemblyName>
-    <Version>1.0.2</Version>
+    <Version>1.0.3</Version>
     <Authors>Winner-Timothy Bolorunduro</Authors>
     <Description>Lightweight client-only RFC 6455 WebSocket library with explicit frame-level control. Targets .NET Framework 4.6.2+, .NET Framework 4.8, and .NET Standard 2.0.</Description>
     <PackageTags>websocket;rfc6455;websocket-client;frames;frame-level;ping;pong;fragmentation;dotnet-framework;netstandard;net462;net48;networking;tcp;tls;wss;low-level;binary-protocol;framewrench</PackageTags>
@@ -27,7 +27,9 @@
     <PackageIcon>frame-wrench-logo.png</PackageIcon>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <Title>Frame Wrench</Title>
-    <PackageReleaseNotes>- Improve RFC compliance and add text validation</PackageReleaseNotes>
+    <PackageReleaseNotes>- Fix handshake byte loss when the server sends the first WebSocket frame in the same TCP segment as the HTTP 101 response.
+- Reduce per-frame send allocations by generating masking keys on the stack.
+- Read frame payloads directly into owned buffers instead of rent-and-copy from ArrayPool.</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
