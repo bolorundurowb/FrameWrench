@@ -25,9 +25,11 @@ internal sealed class IncomingUtf8MessageValidator
     }
 
     /// <summary>
-    /// Validates ordering rules and UTF-8 for completed Text messages. Control frames must not be passed here.
+    /// Validates §5.4 fragmentation ordering. When <paramref name="validateUtf8"/> is
+    /// <c>true</c>, also validates completed Text messages per RFC 6455 §8.1.
+    /// Control frames must not be passed here.
     /// </summary>
-    public void OnDataFrame(WebSocketFrame frame)
+    public void OnDataFrame(WebSocketFrame frame, bool validateUtf8 = true)
     {
         switch (frame.OpCode)
         {
@@ -47,7 +49,8 @@ internal sealed class IncomingUtf8MessageValidator
 
                 if (frame.IsFinal)
                 {
-                    Utf8Validator.ThrowIfInvalidUtf8(frame.Payload.Span);
+                    if (validateUtf8)
+                        Utf8Validator.ThrowIfInvalidUtf8(frame.Payload.Span);
                 }
                 else
                 {
@@ -88,7 +91,8 @@ internal sealed class IncomingUtf8MessageValidator
                     AppendPayload(_textBuf, frame.Payload);
                     if (frame.IsFinal)
                     {
-                        Utf8Validator.ThrowIfInvalidUtf8(_textBuf.ToArray());
+                        if (validateUtf8)
+                            Utf8Validator.ThrowIfInvalidUtf8(_textBuf.ToArray());
                         _textBuf = null;
                         _kind = FragKind.None;
                     }
