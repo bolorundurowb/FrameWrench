@@ -60,10 +60,14 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 
     private TcpClient? _tcp;
     private Stream? _stream;
+    // volatile so state transitions written by the pump task are immediately visible
+    // to callers on other threads without a full memory barrier.
     private volatile WebSocketState _state = WebSocketState.None;
 
     private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
 
+    // SingleWriter=true because only the receive pump pushes frames; this lets the channel
+    // skip internal writer-concurrency bookkeeping.
     private readonly Channel<WebSocketFrame> _frameChannel =
         Channel.CreateUnbounded<WebSocketFrame>(new UnboundedChannelOptions
         {
@@ -74,6 +78,8 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     private Task? _pumpTask;
     private CancellationTokenSource? _pumpCts;
 
+    // Interlocked guard so that concurrent Dispose / DisposeAsync / pump-exit paths
+    // each run CleanUp at most once.
     private int _cleanupEntered;
 
     /// <summary>
@@ -751,8 +757,8 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     }
 
     /// <summary>
-    /// Wraps a <see cref="TaskCompletionSource{TResult}"/> used to correlate
-    /// a received Pong with its outstanding <see cref="PingAsync"/> call.
+    /// Wraps a <see cref="TaskCompletionSource{TResult}"/> so an async <see cref="PingAsync"/>
+    /// call can efficiently await Pong arrival without polling or blocking a thread.
     /// </summary>
     private sealed class PingWaiter
     {
