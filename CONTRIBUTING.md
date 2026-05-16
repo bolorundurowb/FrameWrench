@@ -8,6 +8,31 @@ Thank you for considering a contribution to FrameWrench.
 4. Follow the existing XML-doc comment style.
 5. **CI and Codecov:** pushes and PRs to `master` run `.github/workflows/ci.yml` (build, test, coverage). Maintainers should add a **`CODECOV_TOKEN`** repository secret from [Codecov](https://codecov.io) so coverage uploads succeed; forks may rely on Codecov's tokenless rules for public repositories when the upstream org allows it.
 
+## Building
+
+### Prerequisites
+
+- **.NET SDK 10** or later (required for **C# 13**, which this repo pins in all projects)
+- **.NET Framework 4.6.2** and **4.8** targeting packs / developer packs on Windows when building `net462`, `net48`, the sample, or `src/tests` for those monikers
+- Visual Studio 2022 17.10+ or JetBrains Rider (for `.slnx` solution file support)
+
+### Build
+
+```bash
+# Restore + build all targets
+dotnet build src/FrameWrench.slnx
+
+# Run unit and integration tests
+dotnet test src/FrameWrench.slnx
+
+# Run the example app (.NET Framework; pick one installed TFM)
+dotnet run --project samples/FrameWrench.Example --framework net48
+```
+
+### Opening in Visual Studio
+
+Open `src/FrameWrench.slnx` in Visual Studio 2022 17.10+. Older versions can open the individual `.csproj` files directly.
+
 
 ## Project Structure
 

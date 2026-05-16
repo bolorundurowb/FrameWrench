@@ -118,32 +118,6 @@ dotnet pack -c Release
 Then consume the resulting `.nupkg` via a [local NuGet feed](https://learn.microsoft.com/en-us/nuget/hosting-packages/local-feeds) or `dotnet add package` with a `--source` path.
 
 
-## Building
-
-### Prerequisites
-
-- **.NET SDK 10** or later (required for **C# 13**, which this repo pins in all projects)
-- **.NET Framework 4.6.2** and **4.8** targeting packs / developer packs on Windows when building `net462`, `net48`, the sample, or `src/tests` for those monikers
-- Visual Studio 2022 17.10+ or JetBrains Rider (for `.slnx` solution file support)
-
-### Build
-
-```bash
-# Restore + build all targets
-dotnet build src/FrameWrench.slnx
-
-# Run unit and integration tests
-dotnet test src/FrameWrench.slnx
-
-# Run the example app (.NET Framework; pick one installed TFM)
-dotnet run --project samples/FrameWrench.Example --framework net48
-```
-
-### Opening in Visual Studio
-
-Open `src/FrameWrench.slnx` in Visual Studio 2022 17.10+. Older versions can open the individual `.csproj` files directly.
-
-
 ## Quick Start
 
 Use one `FrameWrenchClient` per WebSocket connection; after a close, create a new instance to reconnect (unlike `HttpClient`, instances are not pooled for reuse).
