@@ -1,3 +1,9 @@
+<div align="center">
+  <img
+    src="https://raw.githubusercontent.com/bolorundurowb/FrameWrench/refs/heads/master/assets/frame-wrench-logo.png"
+    alt="omni assert logo"  />
+</div>
+
 # FrameWrench
 
 [![Build, Test & Coverage](https://github.com/bolorundurowb/FrameWrench/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/bolorundurowb/FrameWrench/actions/workflows/build-and-test.yml) [![codecov](https://codecov.io/gh/bolorundurowb/FrameWrench/graph/badge.svg?token=poFOTCdIj8)](https://codecov.io/gh/bolorundurowb/FrameWrench) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) ![NuGet Version](https://img.shields.io/nuget/v/FrameWrench)
@@ -81,14 +87,14 @@ dotnet add package FrameWrench
 To pin a specific version:
 
 ```bash
-dotnet add package FrameWrench --version 1.0.0
+dotnet add package FrameWrench --version 1.0.2
 ```
 
 ### Project file
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="FrameWrench" Version="1.0.0" />
+  <PackageReference Include="FrameWrench" Version="1.0.2" />
 </ItemGroup>
 ```
 
@@ -110,32 +116,6 @@ dotnet pack -c Release
 ```
 
 Then consume the resulting `.nupkg` via a [local NuGet feed](https://learn.microsoft.com/en-us/nuget/hosting-packages/local-feeds) or `dotnet add package` with a `--source` path.
-
-
-## Building
-
-### Prerequisites
-
-- **.NET SDK 10** or later (required for **C# 13**, which this repo pins in all projects)
-- **.NET Framework 4.6.2** and **4.8** targeting packs / developer packs on Windows when building `net462`, `net48`, the sample, or `src/tests` for those monikers
-- Visual Studio 2022 17.10+ or JetBrains Rider (for `.slnx` solution file support)
-
-### Build
-
-```bash
-# Restore + build all targets
-dotnet build src/FrameWrench.slnx
-
-# Run unit and integration tests
-dotnet test src/FrameWrench.slnx
-
-# Run the example app (.NET Framework; pick one installed TFM)
-dotnet run --project samples/FrameWrench.Example --framework net48
-```
-
-### Opening in Visual Studio
-
-Open `src/FrameWrench.slnx` in Visual Studio 2022 17.10+. Older versions can open the individual `.csproj` files directly.
 
 
 ## Quick Start
