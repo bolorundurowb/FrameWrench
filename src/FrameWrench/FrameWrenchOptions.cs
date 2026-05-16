@@ -95,8 +95,19 @@ public sealed class FrameWrenchOptions
 
     /// <summary>
     /// How long to wait for the peer's Close echo after sending a Close frame.
-    /// If the timeout elapses the TCP connection is closed unconditionally.
+    /// If the timeout elapses the TCP connection is closed unconditionally and
+    /// <see cref="FrameWrenchClient.CloseAsync"/> returns without raising.
     /// Default: 5 seconds.
     /// </summary>
     public TimeSpan CloseHandshakeTimeout { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Maximum number of received frames that may be buffered in memory before the receive
+    /// pump applies backpressure to the underlying stream. When <c>null</c> (default) the
+    /// receive channel is unbounded — appropriate for low-latency consumers but unsafe when
+    /// the application may fall behind a chatty server. When set, the pump waits
+    /// (asynchronously, without blocking IO threads) before reading the next frame, which in
+    /// turn lets the TCP receive window close and slow the peer down.
+    /// </summary>
+    public int? ReceiveChannelCapacity { get; set; }
 }

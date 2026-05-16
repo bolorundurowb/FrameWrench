@@ -215,4 +215,82 @@ public class HandshakeHelperTests
         var b = HandshakeHelper.ComputeAcceptValue("BBBBBBBBBBBBBBBBBBBBBB==");
         a.ShouldNotBe(b);
     }
+
+    [Fact]
+    public async Task ValidateResponse_ServerSelectsAdvertisedSubProtocol_ReturnsIt()
+    {
+        const string accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
+        var response =
+            "HTTP/1.1 101 Switching Protocols\r\n" +
+            "Upgrade: websocket\r\n" +
+            "Connection: Upgrade\r\n" +
+            $"Sec-WebSocket-Accept: {accept}\r\n" +
+            "Sec-WebSocket-Protocol: chat.v2\r\n" +
+            "\r\n";
+
+        var selected = await HandshakeHelper.ValidateResponseAsync(
+            ResponseStream(response),
+            accept,
+            CancellationToken.None,
+            new[] { "chat.v1", "chat.v2" });
+
+        selected.ShouldBe("chat.v2");
+    }
+
+    [Fact]
+    public async Task ValidateResponse_ServerSelectsUnadvertisedSubProtocol_Throws()
+    {
+        const string accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
+        var response =
+            "HTTP/1.1 101 Switching Protocols\r\n" +
+            "Upgrade: websocket\r\n" +
+            "Connection: Upgrade\r\n" +
+            $"Sec-WebSocket-Accept: {accept}\r\n" +
+            "Sec-WebSocket-Protocol: rogue\r\n" +
+            "\r\n";
+
+        await Should.ThrowAsync<WebSocketHandshakeException>(
+            () => HandshakeHelper.ValidateResponseAsync(
+                ResponseStream(response),
+                accept,
+                CancellationToken.None,
+                new[] { "chat.v1" }));
+    }
+
+    [Fact]
+    public async Task ValidateResponse_ServerSelectsSubProtocolButClientAdvertisedNone_Throws()
+    {
+        const string accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
+        var response =
+            "HTTP/1.1 101 Switching Protocols\r\n" +
+            "Upgrade: websocket\r\n" +
+            "Connection: Upgrade\r\n" +
+            $"Sec-WebSocket-Accept: {accept}\r\n" +
+            "Sec-WebSocket-Protocol: chat.v1\r\n" +
+            "\r\n";
+
+        await Should.ThrowAsync<WebSocketHandshakeException>(
+            () => HandshakeHelper.ValidateResponseAsync(
+                ResponseStream(response), accept, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ValidateResponse_ServerReturnsMultipleSubProtocolTokens_Throws()
+    {
+        const string accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
+        var response =
+            "HTTP/1.1 101 Switching Protocols\r\n" +
+            "Upgrade: websocket\r\n" +
+            "Connection: Upgrade\r\n" +
+            $"Sec-WebSocket-Accept: {accept}\r\n" +
+            "Sec-WebSocket-Protocol: chat.v1, chat.v2\r\n" +
+            "\r\n";
+
+        await Should.ThrowAsync<WebSocketHandshakeException>(
+            () => HandshakeHelper.ValidateResponseAsync(
+                ResponseStream(response),
+                accept,
+                CancellationToken.None,
+                new[] { "chat.v1", "chat.v2" }));
+    }
 }

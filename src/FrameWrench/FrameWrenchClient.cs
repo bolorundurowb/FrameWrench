@@ -46,12 +46,31 @@ namespace FrameWrench;
 /// <see cref="FrameWrenchOptions.AutoPing"/>.
 /// </para>
 /// <para>
-/// <strong>UTF-8 (RFC 6455 §8.1):</strong> Complete Text messages from the server are validated
-/// as well-formed UTF-8 before frames are delivered; invalid UTF-8 fails the connection with
-/// <see cref="WebSocketProtocolException"/>. Close frame reason phrases are validated similarly.
-/// Final Text frames sent with <see cref="SendFrameAsync(WebSocketFrame, CancellationToken)"/> are
-/// checked when <see cref="WebSocketFrame.IsFinal"/> is <c>true</c>; fragmented Text you send must
-/// be valid UTF-8 across the whole message (the library does not reassemble outgoing Text for validation).
+/// <strong>UTF-8 (RFC 6455 §8.1):</strong> Complete Text messages — both inbound and outbound — are
+/// validated as well-formed UTF-8 before they reach the wire (outbound) or the consumer (inbound),
+/// including the reassembled payload of fragmented Text messages sent through repeated
+/// <see cref="SendFrameAsync(FrameOpCode, ReadOnlyMemory{byte}, bool, CancellationToken)"/> calls.
+/// Invalid UTF-8 throws <see cref="WebSocketProtocolException"/>; if the failure happens partway
+/// through an outbound multi-frame Text send, prior fragments have already been transmitted and
+/// the caller should treat the connection as compromised and close it. Close frame reason
+/// phrases are validated similarly.
+/// </para>
+/// <para>
+/// <strong>Limitations:</strong>
+/// <list type="bullet">
+///   <item>WebSocket extensions (RFC 7692 per-message deflate, etc.) are not supported. The decoder
+///         treats any non-zero RSV bit as a protocol error, so handshakes that would require extension
+///         negotiation will fail. Use a different library if compression is required.</item>
+///   <item>Empty unsolicited Pongs are delivered to the frame channel and <see cref="FrameReceived"/>
+///         but cannot match a pending <see cref="PingAsync"/> waiter. <see cref="PingAsync"/> therefore
+///         substitutes a 4-byte random payload when the caller passes an empty payload so correlation
+///         still works.</item>
+///   <item>Server <c>Sec-WebSocket-Protocol</c> responses are validated against
+///         <see cref="FrameWrenchOptions.SubProtocols"/>; the selected value is exposed via
+///         <see cref="SelectedSubProtocol"/>.</item>
+///   <item>The receive channel is unbounded by default. If consumers may fall behind, set
+///         <see cref="FrameWrenchOptions.ReceiveChannelCapacity"/> to enable backpressure.</item>
+/// </list>
 /// </para>
 /// </remarks>
 public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
@@ -64,12 +83,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 
     private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
 
-    private readonly Channel<WebSocketFrame> _frameChannel =
-        Channel.CreateUnbounded<WebSocketFrame>(new UnboundedChannelOptions
-        {
-            SingleReader = false,
-            SingleWriter = true,
-        });
+    private readonly Channel<WebSocketFrame> _frameChannel;
 
     private Task? _pumpTask;
     private CancellationTokenSource? _pumpCts;
@@ -87,9 +101,16 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     private CancellationTokenSource? _autoPingCts;
 
     private readonly IncomingUtf8MessageValidator _incomingUtf8Validator = new();
+    private readonly OutgoingUtf8MessageValidator _outgoingUtf8Validator = new();
 
     /// <summary>The current connection state.</summary>
     public WebSocketState State => _state;
+
+    /// <summary>
+    /// The subprotocol selected by the server during the handshake, or <c>null</c> if none was selected.
+    /// Populated only after <see cref="ConnectAsync"/> completes successfully.
+    /// </summary>
+    public string? SelectedSubProtocol { get; private set; }
 
     /// <summary>
     /// Raised each time a frame is received from the server.
@@ -104,6 +125,32 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     public FrameWrenchClient(FrameWrenchOptions? options = null)
     {
         _options = options ?? new FrameWrenchOptions();
+
+        if (_options.ReceiveChannelCapacity is { } capacity)
+        {
+            if (capacity <= 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(options),
+                    $"{nameof(FrameWrenchOptions.ReceiveChannelCapacity)} must be positive when set " +
+                    "(use null for unbounded).");
+
+            _frameChannel = Channel.CreateBounded<WebSocketFrame>(
+                new BoundedChannelOptions(capacity)
+                {
+                    SingleReader = false,
+                    SingleWriter = true,
+                    FullMode = BoundedChannelFullMode.Wait,
+                });
+        }
+        else
+        {
+            _frameChannel = Channel.CreateUnbounded<WebSocketFrame>(
+                new UnboundedChannelOptions
+                {
+                    SingleReader = false,
+                    SingleWriter = true,
+                });
+        }
     }
 
     /// <summary>
@@ -186,10 +233,12 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         var requestBytes = HandshakeHelper.BuildRequest(uri, keyBase64, extraHeaders);
         await _stream.WriteAsync(requestBytes, 0, requestBytes.Length, ct).ConfigureAwait(false);
 
-        await HandshakeHelper.ValidateResponseAsync(_stream, expectedAccept, ct)
+        SelectedSubProtocol = await HandshakeHelper
+            .ValidateResponseAsync(_stream, expectedAccept, ct, _options.SubProtocols as IReadOnlyCollection<string> ?? _options.SubProtocols.ToList())
             .ConfigureAwait(false);
 
         _incomingUtf8Validator.Reset();
+        _outgoingUtf8Validator.Reset();
         _state = WebSocketState.Open;
 
         _pumpCts = new CancellationTokenSource();
@@ -452,6 +501,15 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     /// <param name="status">Close status code (default: Normal Closure).</param>
     /// <param name="reason">Optional UTF-8 reason phrase (max 123 encoded bytes).</param>
     /// <param name="ct">Cancellation token.</param>
+    /// <remarks>
+    /// If the peer does not send its Close echo within
+    /// <see cref="FrameWrenchOptions.CloseHandshakeTimeout"/>, this method completes silently
+    /// without throwing — the TCP connection is still torn down. Callers that need to know
+    /// whether the handshake completed cleanly should inspect <see cref="State"/> afterwards:
+    /// <see cref="WebSocketState.Closed"/> means the peer echoed, anything else (typically
+    /// <see cref="WebSocketState.CloseSent"/> or <see cref="WebSocketState.Aborted"/>) means the
+    /// handshake did not finish.
+    /// </remarks>
     public async Task CloseAsync(
         WebSocketCloseStatus status = WebSocketCloseStatus.NormalClosure,
         string? reason = null,
@@ -553,17 +611,17 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
                     {
                         case FrameOpCode.Ping:
                             await TrySendPongAsync(frame.Payload, ct).ConfigureAwait(false);
-                            PublishFrame(frame);
+                            await PublishFrameAsync(frame, ct).ConfigureAwait(false);
                             break;
 
                         case FrameOpCode.Pong:
                             CompletePingWaiter(frame);
-                            PublishFrame(frame);
+                            await PublishFrameAsync(frame, ct).ConfigureAwait(false);
                             break;
 
                         case FrameOpCode.Close:
                             Utf8Validator.ThrowIfInvalidCloseReason(frame.Payload);
-                            PublishFrame(frame);
+                            await PublishFrameAsync(frame, ct).ConfigureAwait(false);
                             await HandleIncomingCloseAsync(frame, ct).ConfigureAwait(false);
                             return;
 
@@ -571,11 +629,11 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
                         case FrameOpCode.Binary:
                         case FrameOpCode.Continuation:
                             _incomingUtf8Validator.OnDataFrame(frame);
-                            PublishFrame(frame);
+                            await PublishFrameAsync(frame, ct).ConfigureAwait(false);
                             break;
 
                         default:
-                            PublishFrame(frame);
+                            await PublishFrameAsync(frame, ct).ConfigureAwait(false);
                             break;
                     }
                 }
@@ -596,14 +654,32 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         }
     }
 
-    private void PublishFrame(WebSocketFrame frame)
+    private ValueTask PublishFrameAsync(WebSocketFrame frame, CancellationToken ct)
     {
-        _frameChannel.Writer.TryWrite(frame);
+        // Fast path: unbounded channels and bounded channels with room accept the write
+        // synchronously. Only fall back to WriteAsync when the bounded channel is full, so
+        // the receive pump applies backpressure to the TCP stream instead of dropping frames.
+        if (_frameChannel.Writer.TryWrite(frame))
+        {
+            FrameReceived?.Invoke(this, frame);
+            return default;
+        }
+
+        return PublishFrameSlowAsync(frame, ct);
+    }
+
+    private async ValueTask PublishFrameSlowAsync(WebSocketFrame frame, CancellationToken ct)
+    {
+        await _frameChannel.Writer.WriteAsync(frame, ct).ConfigureAwait(false);
         FrameReceived?.Invoke(this, frame);
     }
 
     private void CompletePingWaiter(WebSocketFrame pong)
     {
+        // RFC 6455 §5.5.4 explicitly allows unsolicited Pongs (heartbeats) with empty payloads.
+        // We cannot correlate an empty Pong with any PingAsync waiter (correlation is by echoed
+        // application data), so we simply skip the waiter lookup. The Pong is still surfaced to
+        // the application via PublishFrame above, so subscribers see every Pong on the wire.
         if (pong.Payload.IsEmpty) return;
         var key = PingPayloadToCorrelationKey(pong.Payload);
         lock (_pendingPingLock)
@@ -636,7 +712,11 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         }
         catch
         {
-            // Best-effort Pong; connection may already be closing.
+            // Best-effort Pong (RFC 6455 §5.5.3 only says a peer SHOULD respond promptly).
+            // Failures are swallowed because the connection may already be tearing down; if the
+            // failure is permanent the next inbound read on the pump will surface it and move the
+            // state to Aborted. Applications that need stronger signalling can subscribe to
+            // FrameReceived for the inbound Ping and send their own Pong via SendFrameAsync.
         }
     }
 
@@ -679,6 +759,11 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 
                 if (!received)
                 {
+                    // Fire-and-forget on purpose: the auto-ping loop must not block on the close
+                    // handshake (CloseAsync waits up to CloseHandshakeTimeout for the peer's echo).
+                    // Applications that need to react immediately to a timed-out ping should watch
+                    // State or subscribe to FrameReceived; State will transition to Closed or
+                    // Aborted as the close handshake unwinds.
                     _ = CloseAsync(WebSocketCloseStatus.GoingAway, "Ping timed out",
                         CancellationToken.None);
                     break;
@@ -694,12 +779,20 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 
     private async Task SendRawFrameAsync(WebSocketFrame frame, CancellationToken ct)
     {
-        if (frame.OpCode == FrameOpCode.Text && frame.IsFinal)
-            Utf8Validator.ThrowIfInvalidUtf8(frame.Payload.Span);
-
         await _sendLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            // RFC 6455 §8.1: a Text message must be well-formed UTF-8 across the full reassembled
+            // payload. The validator buffers in-progress Text fragmentation and validates on the
+            // final frame; single-frame Text is validated immediately. Done under the send lock so
+            // bytes are not put on the wire after a failed validation.
+            if (frame.OpCode == FrameOpCode.Text
+                || frame.OpCode == FrameOpCode.Binary
+                || frame.OpCode == FrameOpCode.Continuation)
+            {
+                _outgoingUtf8Validator.OnDataFrame(frame);
+            }
+
             await FrameEncoder.WriteAsync(_stream!, frame, masked: true, ct)
                 .ConfigureAwait(false);
         }
@@ -735,6 +828,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
             return;
 
         _incomingUtf8Validator.Reset();
+        _outgoingUtf8Validator.Reset();
 
         try { _autoPingCts?.Cancel(); } catch { }
         try { _pumpCts?.Cancel(); } catch { }
