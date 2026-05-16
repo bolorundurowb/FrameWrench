@@ -186,7 +186,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         var requestBytes = HandshakeHelper.BuildRequest(uri, keyBase64, extraHeaders);
         await _stream.WriteAsync(requestBytes, 0, requestBytes.Length, ct).ConfigureAwait(false);
 
-        await HandshakeHelper.ValidateResponseAsync(_stream, expectedAccept, ct)
+        _stream = await HandshakeHelper.ValidateResponseAsync(_stream, expectedAccept, ct)
             .ConfigureAwait(false);
 
         _incomingUtf8Validator.Reset();

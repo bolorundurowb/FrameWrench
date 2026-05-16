@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Security.Cryptography;
 using System.Text;
 using FrameWrench.Core;
+using FrameWrench.Internal;
 
 namespace FrameWrench.Protocol;
 
@@ -99,15 +100,21 @@ internal static class HandshakeHelper
     /// <see cref="ComputeAcceptValue"/>.
     /// </param>
     /// <param name="ct">Cancellation token.</param>
+    /// <returns>
+    /// A stream to use for subsequent WebSocket reads and writes. When the server
+    /// coalesces the first frame with the HTTP 101 response, any bytes read past the
+    /// header block are buffered and returned ahead of further reads from
+    /// <paramref name="stream"/>.
+    /// </returns>
     /// <exception cref="WebSocketHandshakeException">
     /// Thrown if the response is not a valid 101 upgrade or the accept value is wrong.
     /// </exception>
-    public static async Task ValidateResponseAsync(
+    public static async Task<Stream> ValidateResponseAsync(
         Stream stream,
         string expectedAccept,
         CancellationToken ct)
     {
-        var headerBytes = await ReadHttpHeadersAsync(stream, ct).ConfigureAwait(false);
+        var (headerBytes, leftover) = await ReadHttpHeadersAsync(stream, ct).ConfigureAwait(false);
         var response = Encoding.ASCII.GetString(headerBytes);
         var lines = response.Split(["\r\n"], StringSplitOptions.None);
 
@@ -156,14 +163,19 @@ internal static class HandshakeHelper
                 $"Sec-WebSocket-Accept mismatch. Expected '{expectedAccept}', got '{accept}'.",
                 statusLine);
         }
+
+        if (leftover.Length == 0)
+            return stream;
+
+        return new PrependStream(leftover, stream);
     }
 
     /// <summary>
     /// Reads raw bytes from the stream until the HTTP header terminator
-    /// (<c>\r\n\r\n</c>) is found, then returns everything up to and including
-    /// that terminator.  Does not read any bytes beyond the header block.
+    /// (<c>\r\n\r\n</c>) is found, then returns the header block and any bytes
+    /// read beyond it (e.g. the first WebSocket frame in the same TCP segment).
     /// </summary>
-    private static async Task<byte[]> ReadHttpHeadersAsync(
+    private static async Task<(byte[] headers, byte[] leftover)> ReadHttpHeadersAsync(
         Stream stream,
         CancellationToken ct)
     {
@@ -200,9 +212,17 @@ internal static class HandshakeHelper
                 var end = FindHeaderBlockEnd(buf, total);
                 if (end >= 0)
                 {
-                    var result = new byte[end];
-                    Buffer.BlockCopy(buf, 0, result, 0, end);
-                    return result;
+                    var headers = new byte[end];
+                    Buffer.BlockCopy(buf, 0, headers, 0, end);
+
+                    if (total > end)
+                    {
+                        var leftover = new byte[total - end];
+                        Buffer.BlockCopy(buf, end, leftover, 0, leftover.Length);
+                        return (headers, leftover);
+                    }
+
+                    return (headers, []);
                 }
             }
 

@@ -91,9 +91,11 @@ public class HandshakeHelperTests
             $"Sec-WebSocket-Accept: {accept}\r\n" +
             "\r\n";
 
-        await Should.NotThrowAsync(
-            () => HandshakeHelper.ValidateResponseAsync(
-                ResponseStream(response), accept, CancellationToken.None));
+        await Should.NotThrowAsync(async () =>
+        {
+            _ = await HandshakeHelper.ValidateResponseAsync(
+                ResponseStream(response), accept, CancellationToken.None);
+        });
     }
 
     [Fact]
@@ -203,9 +205,11 @@ public class HandshakeHelperTests
             $"Sec-WebSocket-Accept: {accept}\r\n" +
             "\r\n";
 
-        await Should.NotThrowAsync(
-            () => HandshakeHelper.ValidateResponseAsync(
-                ResponseStream(response), accept, CancellationToken.None));
+        await Should.NotThrowAsync(async () =>
+        {
+            _ = await HandshakeHelper.ValidateResponseAsync(
+                ResponseStream(response), accept, CancellationToken.None);
+        });
     }
 
     [Fact]
@@ -214,5 +218,31 @@ public class HandshakeHelperTests
         var a = HandshakeHelper.ComputeAcceptValue("AAAAAAAAAAAAAAAAAAAAAA==");
         var b = HandshakeHelper.ComputeAcceptValue("BBBBBBBBBBBBBBBBBBBBBB==");
         a.ShouldNotBe(b);
+    }
+
+    [Fact]
+    public async Task ValidateResponse_BytesAfterHeaders_PreservedOnReturnedStream()
+    {
+        const string accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
+        var response =
+            "HTTP/1.1 101 Switching Protocols\r\n" +
+            "Upgrade: websocket\r\n" +
+            "Connection: Upgrade\r\n" +
+            $"Sec-WebSocket-Accept: {accept}\r\n" +
+            "\r\n";
+
+        // Server may send the first WebSocket frame in the same read as the 101 response.
+        var firstFrame = new byte[] { 0x81, 0x00 }; // FIN + Text, zero-length payload
+        var responseBytes = System.Text.Encoding.ASCII.GetBytes(response);
+        var combined = new byte[responseBytes.Length + firstFrame.Length];
+        Buffer.BlockCopy(responseBytes, 0, combined, 0, responseBytes.Length);
+        Buffer.BlockCopy(firstFrame, 0, combined, responseBytes.Length, firstFrame.Length);
+
+        var stream = await HandshakeHelper.ValidateResponseAsync(
+            new MemoryStream(combined), accept, CancellationToken.None);
+
+        var read = new byte[firstFrame.Length];
+        (await stream.ReadAsync(read, 0, read.Length, CancellationToken.None)).ShouldBe(firstFrame.Length);
+        read.ShouldBe(firstFrame);
     }
 }
