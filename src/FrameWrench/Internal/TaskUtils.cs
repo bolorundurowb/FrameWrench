@@ -11,7 +11,8 @@ internal static class TaskUtils
     /// </summary>
     public static async Task WaitAsync(Task task, CancellationToken ct)
     {
-        if (task.IsCompleted) return;
+        if (task.IsCompleted) 
+            return;
 
         ct.ThrowIfCancellationRequested();
 
@@ -37,7 +38,8 @@ internal static class TaskUtils
     /// </summary>
     public static async Task<T> WaitAsync<T>(Task<T> task, CancellationToken ct)
     {
-        if (task.IsCompleted) return task.Result;
+        if (task.IsCompleted) 
+            return task.Result;
 
         ct.ThrowIfCancellationRequested();
 

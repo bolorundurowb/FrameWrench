@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Buffers.Binary;
 using FrameWrench.Core;
 
@@ -114,9 +113,7 @@ internal static class FrameDecoder
     }
 
     /// <summary>
-    /// Reads exactly <paramref name="length"/> bytes and returns them in a
-    /// precisely-sized array.  Uses <see cref="ArrayPool{T}"/> internally to
-    /// minimise allocations on the hot path.
+    /// Reads exactly <paramref name="length"/> bytes into a precisely-sized owned array.
     /// </summary>
     private static async Task<byte[]> ReadPayloadAsync(
         Stream stream,
@@ -125,18 +122,9 @@ internal static class FrameDecoder
     {
         if (length == 0) return [];
 
-        var rented = ArrayPool<byte>.Shared.Rent(length);
-        try
-        {
-            await ReadExactAsync(stream, rented, 0, length, ct).ConfigureAwait(false);
-            var result = new byte[length];
-            Array.Copy(rented, 0, result, 0, length);
-            return result;
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
-        }
+        var payload = new byte[length];
+        await ReadExactAsync(stream, payload, 0, length, ct).ConfigureAwait(false);
+        return payload;
     }
 
     /// <summary>
