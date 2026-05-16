@@ -81,14 +81,14 @@ dotnet add package FrameWrench
 To pin a specific version:
 
 ```bash
-dotnet add package FrameWrench --version 1.0.0
+dotnet add package FrameWrench --version 1.0.2
 ```
 
 ### Project file
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="FrameWrench" Version="1.0.0" />
+  <PackageReference Include="FrameWrench" Version="1.0.2" />
 </ItemGroup>
 ```
 
