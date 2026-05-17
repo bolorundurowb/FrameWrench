@@ -35,6 +35,29 @@ public class IncomingUtf8MessageValidatorTests
     }
 
     [Fact]
+    public void SingleTextFrame_InvalidUtf8_WhenValidationDisabled_DoesNotThrow()
+    {
+        var v = new IncomingUtf8MessageValidator();
+        v.OnDataFrame(T([0xFF, 0xFE]), validateUtf8: false);
+    }
+
+    [Fact]
+    public void SingleFinalText_WithUtf8ValidationDisabled_AllowsSubsequentMessage()
+    {
+        var v = new IncomingUtf8MessageValidator();
+        v.OnDataFrame(T([0xFF, 0xFE]), validateUtf8: false);
+        v.OnDataFrame(T(U("second")), validateUtf8: false);
+    }
+
+    [Fact]
+    public void ContinuationWithoutStart_WhenUtf8ValidationDisabled_StillThrows()
+    {
+        var v = new IncomingUtf8MessageValidator();
+        Should.Throw<WebSocketProtocolException>(() =>
+            v.OnDataFrame(C([1], fin: true), validateUtf8: false));
+    }
+
+    [Fact]
     public void FragmentedText_ValidUtf8AcrossFragments_DoesNotThrow()
     {
         var v = new IncomingUtf8MessageValidator();

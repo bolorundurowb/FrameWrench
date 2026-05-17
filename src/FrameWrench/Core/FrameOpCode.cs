@@ -1,31 +1,35 @@
 namespace FrameWrench.Core;
 
 /// <summary>
-/// WebSocket frame opcodes as defined in RFC 6455 §5.2.
+/// WebSocket frame opcodes (RFC 6455 §5.2).
 /// </summary>
 /// <remarks>
-/// Values 0x3-0x7 are reserved for future non-control frames.
-/// Values 0xB-0xF are reserved for future control frames.
-/// Any received frame with a reserved opcode that has not been negotiated as
-/// an extension causes a protocol-error close.
+/// Values <c>0x3</c>–<c>0x7</c> are reserved for future non-control frames.
+/// Values <c>0xB</c>–<c>0xF</c> are reserved for future control frames.
+/// An endpoint that receives an unnegotiated reserved opcode must fail the connection.
 /// </remarks>
 public enum FrameOpCode : byte
 {
-    /// <summary>Continuation frame (0x0) - carries a fragment of the current message.</summary>
+    /// <summary>Continuation (0x0): payload continues the current fragmented message.</summary>
     Continuation = 0x0,
 
-    /// <summary>Text frame (0x1) - payload is UTF-8 encoded text.</summary>
+    /// <summary>Text (0x1): payload is UTF-8 encoded application text.</summary>
     Text = 0x1,
 
-    /// <summary>Binary frame (0x2) - payload is arbitrary binary data.</summary>
+    /// <summary>Binary (0x2): payload is opaque application data.</summary>
     Binary = 0x2,
 
-    /// <summary>Close frame (0x8) - initiates or acknowledges the closing handshake.</summary>
+    /// <summary>Close (0x8): begins or acknowledges the closing handshake.</summary>
     Close = 0x8,
 
-    /// <summary>Ping frame (0x9) - keep-alive or latency probe. Must be answered with a Pong.</summary>
+    /// <summary>
+    /// Ping (0x9): keep-alive or latency probe; the peer should respond with
+    /// <see cref="Pong"/> carrying the same application data.
+    /// </summary>
     Ping = 0x9,
 
-    /// <summary>Pong frame (0xA) - unsolicited or in response to a Ping.</summary>
+    /// <summary>
+    /// Pong (0xA): response to a <see cref="Ping"/> or an unsolicited heartbeat.
+    /// </summary>
     Pong = 0xA,
 }

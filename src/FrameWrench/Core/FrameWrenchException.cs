@@ -3,61 +3,87 @@ namespace FrameWrench.Core;
 /// <summary>
 /// Base exception for all FrameWrench errors.
 /// </summary>
+/// <remarks>
+/// Catch this type to handle any library-specific failure. More specific types such as
+/// <see cref="WebSocketHandshakeException"/>, <see cref="WebSocketProtocolException"/>,
+/// <see cref="WebSocketStateException"/>, and <see cref="WebSocketClosedByPeerException"/>
+/// derive from this class.
+/// </remarks>
 public class FrameWrenchException : Exception
 {
-    /// <inheritdoc/>
+    /// <summary>Initialises a new instance of <see cref="FrameWrenchException"/>.</summary>
     public FrameWrenchException() { }
 
-    /// <inheritdoc/>
+    /// <summary>Initialises a new instance with the specified message.</summary>
+    /// <param name="message">A description of the error.</param>
     public FrameWrenchException(string message) : base(message) { }
 
-    /// <inheritdoc/>
+    /// <summary>Initialises a new instance with the specified message and inner exception.</summary>
+    /// <param name="message">A description of the error.</param>
+    /// <param name="inner">The exception that caused this error.</param>
     public FrameWrenchException(string message, Exception inner) : base(message, inner) { }
 }
 
 /// <summary>
-/// Raised when the HTTP Upgrade handshake fails (non-101 status, missing headers,
-/// or an invalid <c>Sec-WebSocket-Accept</c> value).
+/// The HTTP Upgrade handshake failed (non-101 status, missing or invalid headers, or an
+/// incorrect <c>Sec-WebSocket-Accept</c> value).
 /// </summary>
 public class WebSocketHandshakeException : FrameWrenchException
 {
-    /// <summary>The HTTP status line received from the server, if available.</summary>
+    /// <summary>
+    /// Gets the HTTP status line received from the server, when available.
+    /// </summary>
     public string? StatusLine { get; }
 
-    /// <inheritdoc/>
+    /// <summary>Initialises a new instance with the specified message.</summary>
+    /// <param name="message">A description of the handshake failure.</param>
     public WebSocketHandshakeException(string message) : base(message) { }
 
     /// <summary>
-    /// Initialises the exception with additional HTTP status-line context.
+    /// Initialises a new instance with the specified message and HTTP status line.
     /// </summary>
+    /// <param name="message">A description of the handshake failure.</param>
+    /// <param name="statusLine">The first line of the HTTP response, if parsed.</param>
     public WebSocketHandshakeException(string message, string? statusLine)
         : base(message)
     {
         StatusLine = statusLine;
     }
 
-    /// <inheritdoc/>
+    /// <summary>Initialises a new instance with the specified message and inner exception.</summary>
+    /// <param name="message">A description of the handshake failure.</param>
+    /// <param name="inner">The exception that caused this error.</param>
     public WebSocketHandshakeException(string message, Exception inner) : base(message, inner) { }
 }
 
 /// <summary>
-/// Raised when the peer sends a Close frame and the application is reading logical
-/// messages via <see cref="FrameWrench.FrameWrenchClient.ReceiveMessageAsync"/>.
+/// The peer sent a Close frame while the application was reading logical messages via
+/// <see cref="FrameWrench.FrameWrenchClient.ReceiveMessageAsync(System.Threading.CancellationToken)"/>.
 /// </summary>
 /// <remarks>
-/// Close frames are still published to the frame channel for <see cref="FrameWrench.FrameWrenchClient.ReceiveFrameAsync"/>
-/// and <see cref="FrameWrench.FrameWrenchClient.GetFrameStream"/>; this exception exists so message-level callers
-/// receive the status code and reason instead of skipping control frames silently.
+/// Close frames are still delivered on the frame channel through
+/// <see cref="FrameWrench.FrameWrenchClient.ReceiveFrameAsync(System.Threading.CancellationToken)"/>
+/// and <see cref="FrameWrench.FrameWrenchClient.GetFrameStream(System.Threading.CancellationToken)"/>.
+/// This exception gives message-level callers the status code and reason without silently
+/// skipping control frames.
 /// </remarks>
 public class WebSocketClosedByPeerException : FrameWrenchException
 {
-    /// <summary>The close status from the peer's Close frame payload, if present.</summary>
+    /// <summary>
+    /// Gets the close status code from the peer's Close frame payload, or <c>null</c> when
+    /// the payload contained no status code.
+    /// </summary>
     public WebSocketCloseStatus? CloseStatus { get; }
 
-    /// <summary>The UTF-8 reason phrase from the peer, or empty when absent.</summary>
+    /// <summary>
+    /// Gets the UTF-8 reason phrase from the peer's Close frame, or
+    /// <see cref="string.Empty"/> when absent.
+    /// </summary>
     public string CloseReason { get; }
 
-    /// <summary>Initialises the exception with decoded Close payload fields.</summary>
+    /// <summary>Initialises a new instance from decoded Close payload fields.</summary>
+    /// <param name="closeStatus">The status code, if present in the payload.</param>
+    /// <param name="closeReason">The reason phrase, which may be empty.</param>
     public WebSocketClosedByPeerException(WebSocketCloseStatus? closeStatus, string closeReason)
         : base(FormatMessage(closeStatus, closeReason))
     {
@@ -79,29 +105,37 @@ public class WebSocketClosedByPeerException : FrameWrenchException
 }
 
 /// <summary>
-/// Raised when an RFC 6455 protocol rule is violated during frame parsing or sending
-/// (e.g., a reserved opcode, an unmasked server frame, a fragmented control frame,
-/// or a control frame with a payload &gt; 125 bytes).
+/// An RFC 6455 protocol rule was violated during frame processing or sending.
 /// </summary>
+/// <remarks>
+/// Examples include reserved opcodes, unmasked server frames, fragmented control frames,
+/// control payloads larger than 125 bytes, invalid UTF-8 in Text or Close payloads (when
+/// validation is enabled), and §5.4 fragmentation ordering errors.
+/// </remarks>
 public class WebSocketProtocolException : FrameWrenchException
 {
-    /// <inheritdoc/>
+    /// <summary>Initialises a new instance with the specified message.</summary>
+    /// <param name="message">A description of the protocol violation.</param>
     public WebSocketProtocolException(string message) : base(message) { }
 
-    /// <inheritdoc/>
+    /// <summary>Initialises a new instance with the specified message and inner exception.</summary>
+    /// <param name="message">A description of the protocol violation.</param>
+    /// <param name="inner">The exception that caused this error.</param>
     public WebSocketProtocolException(string message, Exception inner) : base(message, inner) { }
 }
 
 /// <summary>
-/// Raised when an operation is attempted on a <see cref="FrameWrenchClient"/>
-/// that is not in the required state (e.g., sending after close).
+/// An operation was attempted on a <see cref="FrameWrench.FrameWrenchClient"/> that is not
+/// valid in the current <see cref="WebSocketState"/> (for example, sending while closed).
 /// </summary>
 public class WebSocketStateException : FrameWrenchException
 {
-    /// <summary>The state the client was in when the exception was thrown.</summary>
+    /// <summary>Gets the client state when the exception was thrown.</summary>
     public WebSocketState CurrentState { get; }
 
-    /// <summary>Initialises the exception with state context.</summary>
+    /// <summary>Initialises a new instance with state context.</summary>
+    /// <param name="state">The current connection state.</param>
+    /// <param name="message">A description of the invalid operation.</param>
     public WebSocketStateException(WebSocketState state, string message)
         : base(message)
     {
