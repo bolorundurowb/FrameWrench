@@ -3,25 +3,29 @@ using FrameWrench.Internal;
 namespace FrameWrench.Core;
 
 /// <summary>
-/// A fully-reassembled WebSocket message, produced by
-/// <see cref="FrameWrenchClient.ReceiveMessageAsync"/>.
+/// A fully reassembled application data message produced by
+/// <see cref="FrameWrench.FrameWrenchClient.ReceiveMessageAsync(System.Threading.CancellationToken)"/>.
 /// </summary>
 /// <remarks>
-/// For messages that arrive as a single un-fragmented frame, <see cref="Frames"/>
-/// contains exactly one element.  For fragmented messages all fragments are stored
-/// in order so callers can inspect individual frames if needed.
+/// Control frames (Ping, Pong, Close) are not included. For unfragmented messages,
+/// <see cref="Frames"/> contains a single element. For fragmented messages, fragments appear
+/// in transmission order.
 /// </remarks>
 public sealed class WebSocketMessage
 {
     /// <summary>
-    /// The message type: <see cref="FrameOpCode.Text"/> or <see cref="FrameOpCode.Binary"/>.
+    /// Gets the message type: <see cref="FrameOpCode.Text"/> or <see cref="FrameOpCode.Binary"/>.
     /// </summary>
     public FrameOpCode MessageType { get; }
 
-    /// <summary>The reassembled payload across all fragments.</summary>
+    /// <summary>
+    /// Gets the concatenated payload bytes across all fragments.
+    /// </summary>
     public ReadOnlyMemory<byte> Payload { get; }
 
-    /// <summary>The individual frames that compose this message, in order.</summary>
+    /// <summary>
+    /// Gets the individual frames that compose this message, in order.
+    /// </summary>
     public IReadOnlyList<WebSocketFrame> Frames { get; }
 
     /// <summary>Initialises a new <see cref="WebSocketMessage"/>.</summary>
@@ -36,9 +40,15 @@ public sealed class WebSocketMessage
     }
 
     /// <summary>
-    /// Decodes the payload as UTF-8 text.  Should only be called for
-    /// <see cref="FrameOpCode.Text"/> messages.
+    /// Decodes <see cref="Payload"/> as a UTF-8 string.
     /// </summary>
+    /// <returns>The text content of the message.</returns>
+    /// <remarks>
+    /// Call only when <see cref="MessageType"/> is <see cref="FrameOpCode.Text"/>.
+    /// When <see cref="FrameWrench.FrameWrenchOptions.FailOnInvalidIncomingUtf8"/> is
+    /// <c>true</c> (default), invalid UTF-8 causes the connection to abort before this
+    /// method runs.
+    /// </remarks>
     public string GetText() =>
         Utf8StringUtil.GetString(Payload);
 

@@ -100,19 +100,24 @@ internal static class HandshakeHelper
     /// <see cref="ComputeAcceptValue"/>.
     /// </param>
     /// <param name="ct">Cancellation token.</param>
+    /// <param name="advertisedSubProtocols">
+    /// Subprotocols the client advertised in <c>Sec-WebSocket-Protocol</c>. When non-empty,
+    /// the server's response is required to contain a single
+    /// <c>Sec-WebSocket-Protocol</c> header whose value is one of the advertised entries
+    /// (RFC 6455 §1.9, §4.1). Pass <c>null</c> or empty when the client did not advertise.
+    /// </param>
     /// <returns>
-    /// A stream to use for subsequent WebSocket reads and writes. When the server
-    /// coalesces the first frame with the HTTP 101 response, any bytes read past the
-    /// header block are buffered and returned ahead of further reads from
-    /// <paramref name="stream"/>.
+    /// The subprotocol selected by the server, or <c>null</c> if the server did not select one.
     /// </returns>
     /// <exception cref="WebSocketHandshakeException">
-    /// Thrown if the response is not a valid 101 upgrade or the accept value is wrong.
+    /// Thrown if the response is not a valid 101 upgrade, the accept value is wrong, or
+    /// the server selected a subprotocol that was not advertised.
     /// </exception>
-    public static async Task<Stream> ValidateResponseAsync(
+    public static async Task<string?> ValidateResponseAsync(
         Stream stream,
         string expectedAccept,
-        CancellationToken ct)
+        CancellationToken ct,
+        IReadOnlyCollection<string>? advertisedSubProtocols = null)
     {
         var (headerBytes, leftover) = await ReadHttpHeadersAsync(stream, ct).ConfigureAwait(false);
         var response = Encoding.ASCII.GetString(headerBytes);
@@ -164,10 +169,54 @@ internal static class HandshakeHelper
                 statusLine);
         }
 
-        if (leftover.Length == 0)
-            return stream;
+        // RFC 6455 §4.1: if the server returns Sec-WebSocket-Protocol, the value must be a
+        // single token that exactly matches one of the subprotocols the client offered.
+        var selectedSubProtocol = headers.TryGetValue("Sec-WebSocket-Protocol", out var protoHeader)
+            ? protoHeader
+            : null;
 
-        return new PrependStream(leftover, stream);
+        if (!string.IsNullOrEmpty(selectedSubProtocol))
+        {
+            // Server SHOULD return a single token, but be lenient about surrounding whitespace.
+            var token = selectedSubProtocol!.Trim();
+
+            if (token.IndexOf(',') >= 0)
+            {
+                throw new WebSocketHandshakeException(
+                    $"Server returned multiple subprotocols in Sec-WebSocket-Protocol ('{selectedSubProtocol}'); " +
+                    "RFC 6455 §4.1 requires a single token.",
+                    statusLine);
+            }
+
+            if (advertisedSubProtocols is null || advertisedSubProtocols.Count == 0)
+            {
+                throw new WebSocketHandshakeException(
+                    $"Server selected subprotocol '{token}' but the client did not advertise any.",
+                    statusLine);
+            }
+
+            var matched = false;
+            foreach (var advertised in advertisedSubProtocols)
+            {
+                if (string.Equals(advertised, token, StringComparison.Ordinal))
+                {
+                    matched = true;
+                    break;
+                }
+            }
+
+            if (!matched)
+            {
+                throw new WebSocketHandshakeException(
+                    $"Server selected subprotocol '{token}', which the client did not advertise. " +
+                    $"Advertised: {string.Join(", ", advertisedSubProtocols)}.",
+                    statusLine);
+            }
+
+            return token;
+        }
+
+        return null;
     }
 
     /// <summary>
