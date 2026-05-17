@@ -11,7 +11,8 @@ internal static class TaskUtils
     /// </summary>
     public static async Task WaitAsync(Task task, CancellationToken ct)
     {
-        if (task.IsCompleted) return;
+        if (task.IsCompleted) 
+            return;
 
         ct.ThrowIfCancellationRequested();
 
@@ -19,6 +20,8 @@ internal static class TaskUtils
             TaskCreationOptions.RunContinuationsAsynchronously);
 
         using var reg = ct.Register(
+            // Pass tcs as explicit state to avoid capturing it in a closure, which would
+            // allocate on every call even when cancellation is never requested.
             state => ((TaskCompletionSource<bool>)state!).TrySetCanceled(),
             tcs);
 
@@ -37,7 +40,8 @@ internal static class TaskUtils
     /// </summary>
     public static async Task<T> WaitAsync<T>(Task<T> task, CancellationToken ct)
     {
-        if (task.IsCompleted) return task.Result;
+        if (task.IsCompleted) 
+            return task.Result;
 
         ct.ThrowIfCancellationRequested();
 
@@ -45,6 +49,7 @@ internal static class TaskUtils
             TaskCreationOptions.RunContinuationsAsynchronously);
 
         using var reg = ct.Register(
+            // Same closure-avoidance pattern as the non-generic overload above.
             state => ((TaskCompletionSource<T>)state!).TrySetCanceled(),
             tcs);
 

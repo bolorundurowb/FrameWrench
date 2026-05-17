@@ -33,6 +33,10 @@ internal static class FrameEncoder
     /// <summary>Shared RNG for masking keys; thread-safe for <see cref="RandomNumberGenerator.GetBytes(byte[])"/>.</summary>
     private static readonly RandomNumberGenerator s_maskKeyRng = RandomNumberGenerator.Create();
 
+    /// <summary>RNG scratch for <see cref="FillMaskKey"/> on targets without <c>GetBytes(Span&lt;byte&gt;)</c>.</summary>
+    [ThreadStatic]
+    private static byte[]? t_maskKeyScratch;
+
     /// <summary>
     /// Encodes <paramref name="frame"/> and writes it to <paramref name="stream"/>.
     /// </summary>
@@ -110,7 +114,8 @@ internal static class FrameEncoder
 
             if (masked)
             {
-                var maskKey = GenerateMaskKey();
+                Span<byte> maskKey = stackalloc byte[4];
+                FillMaskKey(maskKey);
                 rentedBuf[pos] = maskKey[0];
                 rentedBuf[pos + 1] = maskKey[1];
                 rentedBuf[pos + 2] = maskKey[2];
@@ -135,12 +140,15 @@ internal static class FrameEncoder
     }
 
     /// <summary>
-    /// Generates a cryptographically random 4-byte masking key.
+    /// Fills <paramref name="destination"/> with a cryptographically random 4-byte masking key.
     /// </summary>
-    private static byte[] GenerateMaskKey()
+    private static void FillMaskKey(Span<byte> destination)
     {
-        var key = new byte[4];
-        s_maskKeyRng.GetBytes(key);
-        return key;
+        if (destination.Length != 4)
+            throw new ArgumentException("Mask key must be exactly 4 bytes.", nameof(destination));
+
+        var scratch = t_maskKeyScratch ??= new byte[4];
+        s_maskKeyRng.GetBytes(scratch);
+        scratch.AsSpan().CopyTo(destination);
     }
 }

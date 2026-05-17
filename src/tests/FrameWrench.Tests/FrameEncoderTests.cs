@@ -194,4 +194,65 @@ public class FrameEncoderTests
         var bytes = await EncodeAsync(WebSocketFrame.Ping(payload), masked: false);
         bytes.AsSpan(2).ToArray().ShouldBe(payload);
     }
+
+    [Fact]
+    public async Task MaskedFrame_With16BitLength_HasMaskBitAndCorrectLength()
+    {
+        const int payloadLen = 200;
+        var bytes = await EncodeAsync(
+            new WebSocketFrame(FrameOpCode.Binary, true, new byte[payloadLen]), masked: true);
+
+        (bytes[1] & 0x80).ShouldBe(0x80, "MASK bit must be set");
+        (bytes[1] & 0x7F).ShouldBe(126, "len7 must be 126 for 16-bit length");
+        BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(2, 2)).ShouldBe((ushort)payloadLen);
+        bytes.Length.ShouldBe(2 + 2 + 4 + payloadLen, "header(2) + len16(2) + mask(4) + payload");
+    }
+
+    [Fact]
+    public async Task MaskedFrame_With64BitLength_HasMaskBitAndCorrectLength()
+    {
+        const int payloadLen = 65536;
+        var bytes = await EncodeAsync(
+            new WebSocketFrame(FrameOpCode.Binary, true, new byte[payloadLen]), masked: true);
+
+        (bytes[1] & 0x80).ShouldBe(0x80, "MASK bit must be set");
+        (bytes[1] & 0x7F).ShouldBe(127, "len7 must be 127 for 64-bit length");
+        BinaryPrimitives.ReadUInt64BigEndian(bytes.AsSpan(2, 8)).ShouldBe((ulong)payloadLen);
+        bytes.Length.ShouldBe(2 + 8 + 4 + payloadLen, "header(2) + len64(8) + mask(4) + payload");
+    }
+
+    [Fact]
+    public async Task AllRsvBitsSet_EncodesCorrectly()
+    {
+        var bytes = await EncodeAsync(
+            new WebSocketFrame(FrameOpCode.Text, true, Array.Empty<byte>(),
+                rsv1: true, rsv2: true, rsv3: true));
+
+        (bytes[0] & 0x70).ShouldBe(0x70, "RSV1+RSV2+RSV3 bits must all be set");
+    }
+
+    [Fact]
+    public async Task ContinuationFrame_NotFinal_EncodesAsFinalFalse()
+    {
+        var bytes = await EncodeAsync(
+            new WebSocketFrame(FrameOpCode.Continuation, isFinal: false, new byte[4]));
+
+        (bytes[0] & 0x80).ShouldBe(0, "FIN bit must be clear");
+        (bytes[0] & 0x0F).ShouldBe(0, "Continuation opcode must be 0x0");
+    }
+
+    [Fact]
+    public async Task MaskedFrame_XorWithKey_EachByteUsesCorrectKeyOffset()
+    {
+        var payload = new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
+        var bytes = await EncodeAsync(
+            new WebSocketFrame(FrameOpCode.Binary, true, payload), masked: true);
+
+        var maskKey = bytes.AsSpan(2, 4).ToArray();
+        var masked = bytes.AsSpan(6).ToArray();
+
+        for (var i = 0; i < payload.Length; i++)
+            ((byte)(masked[i] ^ maskKey[i & 3])).ShouldBe(payload[i],
+                $"byte at index {i} did not round-trip through XOR masking");
+    }
 }

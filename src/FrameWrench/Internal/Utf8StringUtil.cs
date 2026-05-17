@@ -4,7 +4,9 @@ using System.Text;
 namespace FrameWrench.Internal;
 
 /// <summary>
-/// UTF-8 decoding from <see cref="ReadOnlyMemory{T}"/>, using the underlying array when available.
+/// Zero-allocation UTF-8 decoding from <see cref="ReadOnlyMemory{T}"/>: when the memory
+/// is backed by a managed array, the array segment is passed directly to
+/// <see cref="Encoding.UTF8"/> to avoid the extra heap copy that <c>.ToArray()</c> would incur.
 /// </summary>
 internal static class Utf8StringUtil
 {

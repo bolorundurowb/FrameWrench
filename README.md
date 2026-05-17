@@ -1,7 +1,7 @@
 <div align="center">
   <img
     src="https://raw.githubusercontent.com/bolorundurowb/FrameWrench/refs/heads/master/assets/frame-wrench-logo.png"
-    alt="omni assert logo"  />
+    alt="FrameWrench logo"  />
 </div>
 
 # FrameWrench
@@ -90,14 +90,14 @@ dotnet add package FrameWrench
 To pin a specific version:
 
 ```bash
-dotnet add package FrameWrench --version 1.0.2
+dotnet add package FrameWrench --version 2.0.0
 ```
 
 ### Project file
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="FrameWrench" Version="1.0.2" />
+  <PackageReference Include="FrameWrench" Version="2.0.0" />
 </ItemGroup>
 ```
 
@@ -251,7 +251,7 @@ await client.CloseAsync(
 ```
 
 
-## Configuration - FrameWrenchOptions
+## Configuration – FrameWrenchOptions
 
 ```csharp
 var options = FrameWrenchOptions.Create()
@@ -449,17 +449,6 @@ Prefer **`await client.DisposeAsync()`** (or `await using`) over **`Dispose()`**
 | `netstandard2.0` | .NET Core 2.x, .NET Core 3.x, .NET 5, .NET 6, .NET 7, .NET 8+ |
 
 
-## Running the Example
-
-```bash
-# Against the public echo server (requires internet; URL may change)
-dotnet run --project samples/FrameWrench.Example --framework net48
-
-# Against a local server
-dotnet run --project samples/FrameWrench.Example --framework net48 -- ws://localhost:9000/ws
-```
-
-
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for branch workflow, tests, XML documentation style, and CI/coverage setup.
@@ -471,4 +460,4 @@ MIT - see `LICENSE` for details.
 
 ## Acknowledgements
 
-- [RFC 6455 - The WebSocket Protocol](https://datatracker.ietf.org/doc/html/rfc6455)
+- [RFC 6455 – The WebSocket Protocol](https://datatracker.ietf.org/doc/html/rfc6455)
