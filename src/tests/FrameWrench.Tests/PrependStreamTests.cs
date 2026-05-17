@@ -6,16 +6,12 @@ namespace FrameWrench.Tests;
 
 public class PrependStreamTests
 {
-    // ── Constructor ──────────────────────────────────────────────────────────
-
     [Fact]
     public void Constructor_NullInnerStream_ThrowsArgumentNullException()
     {
         Should.Throw<ArgumentNullException>(() =>
             new PrependStream(ReadOnlyMemory<byte>.Empty, null!));
     }
-
-    // ── Properties ───────────────────────────────────────────────────────────
 
     [Fact]
     public void CanRead_AlwaysTrue()
@@ -74,8 +70,6 @@ public class PrependStreamTests
         Should.Throw<NotSupportedException>(() => stream.SetLength(0));
     }
 
-    // ── Read – argument validation ────────────────────────────────────────────
-
     [Fact]
     public void Read_NullBuffer_ThrowsArgumentNullException()
     {
@@ -127,8 +121,6 @@ public class PrependStreamTests
         await Should.ThrowAsync<ArgumentException>(
             () => stream.ReadAsync(new byte[4], 2, 4, CancellationToken.None));
     }
-
-    // ── Read – prefix / inner routing (sync) ─────────────────────────────────
 
     [Fact]
     public void Read_EmptyPrefix_ReadsDirectlyFromInner()
@@ -220,8 +212,6 @@ public class PrependStreamTests
         buf[5].ShouldBe((byte)9);
     }
 
-    // ── Read – prefix / inner routing (async) ────────────────────────────────
-
     [Fact]
     public async Task ReadAsync_EmptyPrefix_ReadsDirectlyFromInner()
     {
@@ -268,8 +258,6 @@ public class PrependStreamTests
         buf.ShouldBe(new byte[] { 1, 2, 3, 4 });
     }
 
-    // ── Write ─────────────────────────────────────────────────────────────────
-
     [Fact]
     public void Write_DelegatesToInner()
     {
@@ -294,8 +282,6 @@ public class PrependStreamTests
         inner.ToArray().ShouldBe(data);
     }
 
-    // ── Flush ─────────────────────────────────────────────────────────────────
-
     [Fact]
     public void Flush_DelegatesToInnerWithoutThrowing()
     {
@@ -310,8 +296,6 @@ public class PrependStreamTests
         await Should.NotThrowAsync(() => stream.FlushAsync(CancellationToken.None));
     }
 
-    // ── Dispose ───────────────────────────────────────────────────────────────
-
     [Fact]
     public void Dispose_DisposesInnerStream()
     {
@@ -320,7 +304,6 @@ public class PrependStreamTests
 
         stream.Dispose();
 
-        // MemoryStream marks itself as closed after dispose
         inner.CanRead.ShouldBeFalse();
     }
 }

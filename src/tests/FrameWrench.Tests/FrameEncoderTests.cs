@@ -244,7 +244,6 @@ public class FrameEncoderTests
     [Fact]
     public async Task MaskedFrame_XorWithKey_EachByteUsesCorrectKeyOffset()
     {
-        // Verifies the cyclic key index (i & 3) for a payload longer than 4 bytes.
         var payload = new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
         var bytes = await EncodeAsync(
             new WebSocketFrame(FrameOpCode.Binary, true, payload), masked: true);

@@ -5,8 +5,6 @@ namespace FrameWrench.Tests;
 
 public class TaskUtilsTests
 {
-    // ── Non-generic WaitAsync(Task, CancellationToken) ────────────────────────
-
     [Fact]
     public async Task WaitAsync_AlreadyCompletedTask_CompletesWithoutCreatingTcs()
     {
@@ -81,8 +79,6 @@ public class TaskUtilsTests
 
         await Should.ThrowAsync<OperationCanceledException>(() => waitTask);
     }
-
-    // ── Generic WaitAsync<T>(Task<T>, CancellationToken) ──────────────────────
 
     [Fact]
     public async Task WaitAsyncT_AlreadyCompletedTask_ReturnsResultDirectly()
