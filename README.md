@@ -40,7 +40,9 @@ As of early 2025 there is no maintained, open-source WebSocket *client* library 
 - **SignalR** - protocol layer on top of WebSockets; no raw frame access.
 - **websocket-client (dotnet-websocket-client)** - message-level only; no frame events.
 
-FrameWrench fills this gap: a clean, minimal, fully RFC 6455-compliant *client* library that treats frames as first-class citizens.
+FrameWrench fills this gap: a clean, minimal RFC 6455 *core client* (no extensions) that treats frames as first-class citizens, with strict close/UTF-8 validation and actionable errors.
+
+> **Upgrading from 1.x?** See [MIGRATION.md](MIGRATION.md) for breaking changes in 2.0.
 
 ### Who Needs FrameWrench?
 
@@ -66,7 +68,8 @@ FrameWrench fills this gap: a clean, minimal, fully RFC 6455-compliant *client* 
 | **Fragmented messages**  | Send multi-frame messages; receive as individual frames or reassembled                                                                                                                                                                     |
 | **Message-level API**    | `ReceiveMessageAsync` / `SendTextAsync` / `SendBinaryAsync` for simple use cases                                                                                                                                                           |
 | **Async event model**    | `FrameReceived` event fires for every incoming frame                                                                                                                                                                                       |
-| **Async streaming**      | `GetFrameStream()` returns `IAsyncEnumerable<WebSocketFrame>`                                                                                                                                                                              |
+| **Async streaming**      | `ReceiveFramesAsync()` returns `IAsyncEnumerable<WebSocketFrame>`                                                                                                                                                                          |
+| **Actionable errors**    | Stable `ErrorCode`, RFC links, context, and `help:` suggestions on every failure                                                                                                                                                           |
 | **TLS support**          | Full `wss://` with configurable `SslProtocols` and cert validation callback                                                                                                                                                                |
 | **Auto-Ping (opt-in)**   | Configurable keepalive via `FrameWrenchOptions.AutoPing`                                                                                                                                                                                   |
 | **Zero WS dependencies** | No WebSocket-specific NuGet packages; only Microsoft BCL shims (`System.Memory`, `System.Threading.Channels`, and others), with **per-target** direct dependencies so **net48** / **netstandard2.0** do not pull packages they do not need |
@@ -129,7 +132,7 @@ using FrameWrench;
 using FrameWrench.Core;
 
 await using var client = new FrameWrenchClient();
-await client.ConnectAsync(new Uri("wss://echo.websocket.org"));
+await client.ConnectAsync(new Uri("wss://echo.websocket.org")); // returns ConnectResult in 2.0
 
 // Send a text message
 await client.SendTextAsync("Hello, World!");
@@ -251,29 +254,16 @@ await client.CloseAsync(
 ## Configuration - FrameWrenchOptions
 
 ```csharp
-var options = new FrameWrenchOptions
-{
-    // Connection
-    ConnectTimeout  = TimeSpan.FromSeconds(30),
-    ExtraHeaders    = new Dictionary<string, string> { ["Authorization"] = "Bearer ..." },
-    SubProtocols    = new List<string> { "chat" },
-
-    // TLS (wss://)
-    SslProtocols    = SslProtocols.None,  // on .NET Framework / NS2.0 client path: TLS 1.2; set explicitly for TLS 1.3 where the OS supports it
-    RemoteCertificateValidationCallback = (_, _, _, _) => true,  // dev only!
-
-    // Frame limits
-    MaxFramePayloadBytes   = 64 * 1024 * 1024,  // 64 MiB per frame
-    MaxMessagePayloadBytes = 64 * 1024 * 1024,  // 64 MiB per reassembled message
-
-    // Auto-Ping (opt-in keepalive)
-    AutoPing          = false,
-    KeepAliveInterval = TimeSpan.FromSeconds(30),
-    PingTimeout       = TimeSpan.FromSeconds(10),
-
-    // Close handshake
-    CloseHandshakeTimeout = TimeSpan.FromSeconds(5),
-};
+var options = FrameWrenchOptions.Create()
+    .WithConnectTimeout(TimeSpan.FromSeconds(30))
+    .WithExtraHeader("Authorization", "Bearer ...")
+    .WithSubProtocol("chat")
+    .WithMaxFramePayloadBytes(64 * 1024 * 1024)
+    .WithMaxMessagePayloadBytes(64 * 1024 * 1024)
+    .WithPingTimeout(TimeSpan.FromSeconds(10))
+    .WithCloseHandshakeTimeout(TimeSpan.FromSeconds(5))
+    .Build();
+    // TLS: .WithSslProtocols(...), .WithRemoteCertificateValidationCallback(...) for wss://
 ```
 
 
@@ -291,13 +281,13 @@ WebSocketFrame.Continuation(moreBytes, isFinal: true);
 // Control frames
 WebSocketFrame.Ping(payload);    // optional payload ≤ 125 bytes
 WebSocketFrame.Pong(payload);
-WebSocketFrame.Close(WebSocketCloseStatus.NormalClosure, "bye");
+WebSocketFrame.Close(WireCloseStatus.NormalClosure, "bye");
 
 // Reading a Text frame
 var text = frame.GetTextPayload();
 
 // Reading a Close frame
-frame.GetCloseData(out WebSocketCloseStatus? status, out string reason);
+CloseFrameInfo close = frame.GetCloseInfo();
 ```
 
 
@@ -435,13 +425,17 @@ catch (WebSocketHandshakeException ex)
 }
 catch (WebSocketProtocolException ex)
 {
-    Console.Error.WriteLine($"Protocol error: {ex.Message}");
+    Console.Error.WriteLine($"[{ex.ErrorCode}] {ex.Kind}");
+    Console.Error.WriteLine(ex.Message);
 }
 catch (FrameWrenchException ex)
 {
-    Console.Error.WriteLine($"WebSocket error: {ex.Message}");
+    Console.Error.WriteLine($"[{ex.ErrorCode}]");
+    Console.Error.WriteLine(ex.Message);
 }
 ```
+
+Every `FrameWrenchException` exposes `ErrorCode` and structured `Detail` (context, RFC section, suggestions). See [MIGRATION.md](MIGRATION.md).
 
 Prefer **`await client.DisposeAsync()`** (or `await using`) over **`Dispose()`** when a `SynchronizationContext` may be present (for example, UI or legacy ASP.NET), because synchronous dispose can block while sending the close frame.
 

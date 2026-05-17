@@ -100,6 +100,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     private CancellationTokenSource? _pumpCts;
 
     private int _cleanupEntered;
+    private int _activeFrameConsumers;
 
     /// <summary>
     /// Maps Pong payload (Base64 of echoed application data) to FIFO waiters so concurrent
@@ -149,7 +150,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     /// </exception>
     public FrameWrenchClient(FrameWrenchOptions? options = null)
     {
-        _options = options ?? new FrameWrenchOptions();
+        _options = options ?? FrameWrenchOptions.Default;
 
         if (_options.ReceiveChannelCapacity is { } capacity)
         {
@@ -192,18 +193,16 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     /// </exception>
     /// <exception cref="FrameWrenchException">Thrown when the TCP or TLS connection fails.</exception>
     /// <exception cref="WebSocketHandshakeException">Thrown when the HTTP Upgrade handshake fails.</exception>
-    public async Task ConnectAsync(Uri uri, CancellationToken ct = default)
+    public async Task<ConnectResult> ConnectAsync(Uri uri, CancellationToken ct = default)
     {
         if (uri is null) throw new ArgumentNullException(nameof(uri));
 
         var scheme = uri.Scheme.ToLowerInvariant();
         if (scheme != "ws" && scheme != "wss")
-            throw new ArgumentException(
-                $"URI scheme must be 'ws' or 'wss' (got '{uri.Scheme}').", nameof(uri));
+            throw FrameWrenchErrors.InvalidUriScheme(uri.Scheme);
 
         if (_state != WebSocketState.None)
-            throw new WebSocketStateException(
-                _state, "ConnectAsync may only be called once on a new client instance.");
+            throw FrameWrenchErrors.ConnectCalledTwice();
 
         _state = WebSocketState.Connecting;
 
@@ -223,7 +222,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _state = WebSocketState.Aborted;
-            throw new FrameWrenchException($"TCP connection to {uri.Host}:{port} failed.", ex);
+            throw FrameWrenchErrors.TcpConnectFailed(uri.Host, port, ex);
         }
 
         Stream netStream = _tcp.GetStream();
@@ -255,8 +254,9 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         var (_, keyBase64) = HandshakeHelper.GenerateKey();
         var expectedAccept = HandshakeHelper.ComputeAcceptValue(keyBase64);
 
-        var extraHeaders = new Dictionary<string, string>(
-            _options.ExtraHeaders, StringComparer.OrdinalIgnoreCase);
+        var extraHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in _options.ExtraHeaders)
+            extraHeaders[kv.Key] = kv.Value;
 
         if (_options.SubProtocols.Count > 0)
             extraHeaders["Sec-WebSocket-Protocol"] = string.Join(", ", _options.SubProtocols);
@@ -265,7 +265,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         await _stream.WriteAsync(requestBytes, 0, requestBytes.Length, ct).ConfigureAwait(false);
 
         SelectedSubProtocol = await HandshakeHelper
-            .ValidateResponseAsync(_stream, expectedAccept, ct, _options.SubProtocols as IReadOnlyCollection<string> ?? _options.SubProtocols.ToList())
+            .ValidateResponseAsync(_stream, expectedAccept, ct, _options.SubProtocols)
             .ConfigureAwait(false);
 
         _incomingUtf8Validator.Reset();
@@ -281,6 +281,8 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
             _autoPingTask = Task.Run(
                 () => AutoPingLoopAsync(_autoPingCts.Token), CancellationToken.None);
         }
+
+        return new ConnectResult(SelectedSubProtocol);
     }
 
     /// <summary>Sends a WebSocket frame constructed from the given opcode and payload.</summary>
@@ -347,7 +349,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     /// to Pongs in arrival order (the echoed application data is the correlation key).
     /// Inbound Pongs with an empty payload cannot complete a waiter; see class remarks.
     /// </remarks>
-    public async Task<(bool pongReceived, TimeSpan roundtrip)> PingAsync(
+    public async Task<PingResult> PingAsync(
         ReadOnlyMemory<byte> payload = default,
         TimeSpan timeout = default,
         CancellationToken ct = default)
@@ -369,7 +371,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         }
 
         if (pingPayload.Length > 125)
-            throw new ArgumentException("Ping payload must not exceed 125 bytes (RFC 6455).", nameof(payload));
+            throw FrameWrenchErrors.PingPayloadTooLarge();
 
         var key = Convert.ToBase64String(pingPayload);
         var waiter = new PingWaiter();
@@ -395,12 +397,12 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         {
             await TaskUtils.WaitAsync(waiter.Task, timeoutCts.Token).ConfigureAwait(false);
             sw.Stop();
-            return (true, sw.Elapsed);
+            return new PingResult(true, sw.Elapsed);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             sw.Stop();
-            return (false, sw.Elapsed);
+            return new PingResult(false, sw.Elapsed);
         }
         finally
         {
@@ -461,8 +463,44 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     /// Ping frames receive an automatic Pong response before this method returns the Ping.
     /// Close frames are delivered here before the receive pump stops.
     /// </remarks>
-    public async Task<WebSocketFrame> ReceiveFrameAsync(CancellationToken ct = default)
+    public Task<WebSocketFrame> ReceiveFrameAsync(CancellationToken ct = default) =>
+        ReadFrameFromChannelAsync(ct);
+
+    /// <summary>
+    /// Primary API: enumerates frames until the connection ends or <paramref name="ct"/> is cancelled.
+    /// </summary>
+    public IAsyncEnumerable<WebSocketFrame> ReceiveFramesAsync(CancellationToken ct = default) =>
+        ReceiveFramesCoreAsync(ct);
+
+    /// <summary>
+    /// Obsolete: use <see cref="ReceiveFramesAsync"/>.
+    /// </summary>
+    [Obsolete("Use ReceiveFramesAsync instead.")]
+    public IAsyncEnumerable<WebSocketFrame> GetFrameStream(CancellationToken ct = default) =>
+        ReceiveFramesAsync(ct);
+
+    private async IAsyncEnumerable<WebSocketFrame> ReceiveFramesCoreAsync(
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
+        EnterFrameConsumer();
+        try
+        {
+            var reader = _frameChannel.Reader;
+            while (await reader.WaitToReadAsync(ct).ConfigureAwait(false))
+            {
+                while (reader.TryRead(out var frame))
+                    yield return frame;
+            }
+        }
+        finally
+        {
+            ExitFrameConsumer();
+        }
+    }
+
+    private async Task<WebSocketFrame> ReadFrameFromChannelAsync(CancellationToken ct)
+    {
+        EnterFrameConsumer();
         try
         {
             return await _frameChannel.Reader.ReadAsync(ct).ConfigureAwait(false);
@@ -472,32 +510,30 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
             if (TryUnwrapWebSocketProtocolException(ex) is { } wsp)
                 throw wsp;
 
-            throw new FrameWrenchException(
-                $"The WebSocket connection is closed (state={_state}). No further frames are available.",
-                ex);
+            throw FrameWrenchErrors.ConnectionClosedNoFrames(_state);
+        }
+        finally
+        {
+            ExitFrameConsumer();
         }
     }
 
-    /// <summary>
-    /// Enumerates frames received from the server until the connection ends or
-    /// <paramref name="ct"/> is cancelled.
-    /// </summary>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>An async sequence of received frames.</returns>
-    /// <remarks>
-    /// Competes with <see cref="ReceiveFrameAsync(System.Threading.CancellationToken)"/> and
-    /// <see cref="ReceiveMessageAsync(System.Threading.CancellationToken)"/> for the same
-    /// underlying channel; each frame is delivered to exactly one consumer.
-    /// </remarks>
-    public async IAsyncEnumerable<WebSocketFrame> GetFrameStream(
-        [EnumeratorCancellation] CancellationToken ct = default)
+    private void EnterFrameConsumer()
     {
-        var reader = _frameChannel.Reader;
-        while (await reader.WaitToReadAsync(ct).ConfigureAwait(false))
+        if (!_options.SingleFrameConsumer)
+            return;
+
+        if (Interlocked.Increment(ref _activeFrameConsumers) > 1)
         {
-            while (reader.TryRead(out var frame))
-                yield return frame;
+            Interlocked.Decrement(ref _activeFrameConsumers);
+            throw FrameWrenchErrors.SingleFrameConsumerViolation();
         }
+    }
+
+    private void ExitFrameConsumer()
+    {
+        if (_options.SingleFrameConsumer)
+            Interlocked.Decrement(ref _activeFrameConsumers);
     }
 
     /// <summary>
@@ -528,35 +564,38 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
             var frame = await ReceiveFrameAsync(ct).ConfigureAwait(false);
 
             if (frame.OpCode == FrameOpCode.Close)
-            {
-                frame.GetCloseData(out var closeStatus, out var closeReason);
-                throw new WebSocketClosedByPeerException(closeStatus, closeReason);
-            }
+                throw FrameWrenchErrors.PeerClosed(
+                    frame.GetCloseInfo(), nameof(ReceiveMessageAsync));
 
             if (frame.IsControl) continue;
 
             if (msgType is null)
             {
                 if (frame.OpCode == FrameOpCode.Continuation)
-                    throw new WebSocketProtocolException(
-                        "Received a Continuation frame without a preceding data frame.");
+                    throw FrameWrenchErrors.Fragmentation(
+                        "Received a Continuation frame without a preceding data frame.",
+                        outbound: false,
+                        actual: FrameOpCode.Continuation);
 
                 msgType = frame.OpCode;
             }
             else if (frame.OpCode != FrameOpCode.Continuation)
             {
-                throw new WebSocketProtocolException(
-                    $"Expected a Continuation frame but received {frame.OpCode}. " +
-                    "Interleaved message streams are not permitted (RFC 6455 §5.4).");
+                throw FrameWrenchErrors.Fragmentation(
+                    "Interleaved message streams are not permitted (RFC 6455 §5.4).",
+                    outbound: false,
+                    expected: FrameOpCode.Continuation,
+                    actual: frame.OpCode);
             }
 
             fragments.Add(frame);
             totalLen += frame.Payload.Length;
 
             if (totalLen > _options.MaxMessagePayloadBytes)
-                throw new WebSocketProtocolException(
-                    $"Reassembled message ({totalLen:N0} bytes) exceeds the configured " +
-                    $"maximum of {_options.MaxMessagePayloadBytes:N0} bytes.");
+                throw FrameWrenchErrors.PayloadTooLarge(
+                    totalLen,
+                    _options.MaxMessagePayloadBytes,
+                    nameof(FrameWrenchOptions.MaxMessagePayloadBytes));
 
             if (frame.IsFinal) break;
         }
@@ -593,13 +632,13 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     /// <see cref="WebSocketState.CloseSent"/> or <see cref="WebSocketState.Aborted"/> indicates
     /// it did not finish cleanly.
     /// </remarks>
-    public async Task CloseAsync(
-        WebSocketCloseStatus status = WebSocketCloseStatus.NormalClosure,
+    public async Task<CloseResult> CloseAsync(
+        WireCloseStatus status = WireCloseStatus.NormalClosure,
         string? reason = null,
         CancellationToken ct = default)
     {
         if (_state is not (WebSocketState.Open or WebSocketState.CloseReceived))
-            return;
+            return new CloseResult(false, _state);
 
         _state = WebSocketState.CloseSent;
 
@@ -612,20 +651,23 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         {
             _state = WebSocketState.Aborted;
             CleanUp();
-            return;
+            return new CloseResult(false, _state);
         }
 
         using var closeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         closeCts.CancelAfter(_options.CloseHandshakeTimeout);
 
+        var handshakeCompleted = false;
         try
         {
             await TaskUtils.WaitAsync(
                 _pumpTask ?? Task.CompletedTask, closeCts.Token).ConfigureAwait(false);
+            handshakeCompleted = _state == WebSocketState.Closed;
         }
         catch (OperationCanceledException) { }
 
         CleanUp();
+        return new CloseResult(handshakeCompleted, _state);
     }
 
     /// <summary>
@@ -689,6 +731,12 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
                     if (_state == WebSocketState.Open) _state = WebSocketState.Aborted;
                     break;
                 }
+                catch (WebSocketProtocolException ex)
+                {
+                    if (_state == WebSocketState.Open) _state = WebSocketState.Aborted;
+                    completionError = ex;
+                    break;
+                }
                 catch (Exception)
                 {
                     if (_state == WebSocketState.Open) _state = WebSocketState.Aborted;
@@ -710,8 +758,8 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
                             break;
 
                         case FrameOpCode.Close:
-                            if (_options.FailOnInvalidIncomingUtf8)
-                                Utf8Validator.ThrowIfInvalidCloseReason(frame.Payload);
+                            CloseFrameValidator.ThrowIfInvalidOnWire(
+                                frame.Payload, _options.FailOnInvalidIncomingUtf8);
                             await PublishFrameAsync(frame, ct).ConfigureAwait(false);
                             await HandleIncomingCloseAsync(frame, ct).ConfigureAwait(false);
                             return;
@@ -814,7 +862,8 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 
     private async Task HandleIncomingCloseAsync(WebSocketFrame frame, CancellationToken ct)
     {
-        frame.GetCloseData(out var status, out _);
+        var closeInfo = frame.GetCloseInfo();
+        var echoFrame = CreateCloseEcho(closeInfo);
 
         if (_state == WebSocketState.CloseSent)
         {
@@ -825,8 +874,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
             _state = WebSocketState.CloseReceived;
             try
             {
-                await SendRawFrameAsync(
-                    WebSocketFrame.Close(status ?? WebSocketCloseStatus.NormalClosure), ct)
+                await SendRawFrameAsync(echoFrame, ct)
                     .ConfigureAwait(false);
             }
             catch
@@ -835,6 +883,17 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
             }
             _state = WebSocketState.Closed;
         }
+    }
+
+    private static WebSocketFrame CreateCloseEcho(CloseFrameInfo closeInfo)
+    {
+        if (closeInfo.Status is WireCloseStatus known)
+            return WebSocketFrame.Close(known);
+
+        if (closeInfo.StatusCode is ushort wire)
+            return WebSocketFrame.Close(wire);
+
+        return WebSocketFrame.Close(WireCloseStatus.NormalClosure);
     }
 
     private async Task AutoPingLoopAsync(CancellationToken ct)
@@ -846,17 +905,12 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
                 await Task.Delay(_options.KeepAliveInterval, ct).ConfigureAwait(false);
                 if (_state != WebSocketState.Open) break;
 
-                var (received, _) = await PingAsync(
+                var pingResult = await PingAsync(
                     timeout: _options.PingTimeout, ct: ct).ConfigureAwait(false);
 
-                if (!received)
+                if (!pingResult.PongReceived)
                 {
-                    // Fire-and-forget on purpose: the auto-ping loop must not block on the close
-                    // handshake (CloseAsync waits up to CloseHandshakeTimeout for the peer's echo).
-                    // Applications that need to react immediately to a timed-out ping should watch
-                    // State or subscribe to FrameReceived; State will transition to Closed or
-                    // Aborted as the close handshake unwinds.
-                    _ = CloseAsync(WebSocketCloseStatus.GoingAway, "Ping timed out",
+                    _ = CloseAsync(WireCloseStatus.GoingAway, "Ping timed out",
                         CancellationToken.None);
                     break;
                 }
@@ -876,8 +930,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
         {
             if (frame.OpCode == FrameOpCode.Close)
             {
-                // Outbound Close reasons must be UTF-8 (§7.4.1); always validate before send.
-                Utf8Validator.ThrowIfInvalidCloseReason(frame.Payload);
+                CloseFrameValidator.ThrowIfInvalidOnWire(frame.Payload, validateUtf8: true);
             }
             else if (_options.ValidateOutgoingMessages
                 && (frame.OpCode == FrameOpCode.Text
@@ -900,9 +953,10 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     private void EnsureOpen([CallerMemberName] string? caller = null)
     {
         if (_state != WebSocketState.Open)
-            throw new WebSocketStateException(
+            throw FrameWrenchErrors.InvalidState(
                 _state,
-                $"{caller} requires an open connection (current state: {_state}).");
+                caller ?? "operation",
+                WebSocketState.Open);
     }
 
     private static WebSocketProtocolException? TryUnwrapWebSocketProtocolException(

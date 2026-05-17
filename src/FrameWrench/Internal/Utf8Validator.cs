@@ -12,38 +12,33 @@ internal static class Utf8Validator
         encoderShouldEmitUTF8Identifier: false,
         throwOnInvalidBytes: true);
 
-    /// <summary>
-    /// Throws <see cref="WebSocketProtocolException"/> if <paramref name="utf8Bytes"/> is not well-formed UTF-8.
-    /// </summary>
-    public static void ThrowIfInvalidUtf8(ReadOnlySpan<byte> utf8Bytes) =>
-        ThrowIfInvalidUtf8(utf8Bytes, "Invalid UTF-8 in a Text message. RFC 6455 §8.1 requires failing the WebSocket connection.");
-
-    private static void ThrowIfInvalidUtf8(ReadOnlySpan<byte> utf8Bytes, string message)
+    public static void ThrowIfInvalidUtf8(ReadOnlySpan<byte> utf8Bytes, bool inbound = true)
     {
         if (utf8Bytes.IsEmpty)
             return;
 
         try
         {
-            // Encoding.GetString(ReadOnlySpan<byte>) is unavailable on netstandard2.0; copy once.
             _ = StrictUtf8.GetString(utf8Bytes.ToArray());
         }
         catch (Exception ex) when (ex is ArgumentException or DecoderFallbackException)
         {
-            throw new WebSocketProtocolException(message, ex);
+            throw FrameWrenchErrors.InvalidUtf8(inbound, "Text message");
         }
     }
 
-    /// <summary>
-    /// Validates the optional UTF-8 reason in a Close frame payload (bytes after the 2-byte status code).
-    /// </summary>
-    public static void ThrowIfInvalidCloseReason(ReadOnlyMemory<byte> closePayload)
+    public static void ThrowIfInvalidCloseReason(ReadOnlyMemory<byte> closePayload, bool inbound = true)
     {
         if (closePayload.Length <= 2)
             return;
 
-        ThrowIfInvalidUtf8(
-            closePayload.Span.Slice(2),
-            "Invalid UTF-8 in a Close frame reason. RFC 6455 §7.4.1 requires failing the WebSocket connection.");
+        try
+        {
+            _ = StrictUtf8.GetString(closePayload.Span.Slice(2).ToArray());
+        }
+        catch (Exception ex) when (ex is ArgumentException or DecoderFallbackException)
+        {
+            throw FrameWrenchErrors.InvalidUtf8(inbound, "Close reason");
+        }
     }
 }

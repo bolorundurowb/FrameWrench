@@ -96,7 +96,7 @@ public class FrameDecoderTests
                 rsv1: rsv1,
                 rsv2: rsv2,
                 rsv3: rsv3)));
-        ex.Message.ShouldContain("RSV");
+        ex.ErrorCode.ShouldBe("FW-PROTO-NON-ZERO-RSV");
     }
 
     [Theory]
@@ -135,23 +135,23 @@ public class FrameDecoderTests
         const string reason = "test close";
         var reasonBytes = System.Text.Encoding.UTF8.GetBytes(reason);
         var payload = new byte[2 + reasonBytes.Length];
-        BinaryPrimitives.WriteUInt16BigEndian(payload, (ushort)WebSocketCloseStatus.GoingAway);
+        BinaryPrimitives.WriteUInt16BigEndian(payload, (ushort)WireCloseStatus.GoingAway);
         reasonBytes.CopyTo(payload, 2);
 
         var frame = await Decode(BuildServerFrame(FrameOpCode.Close, true, payload));
-        frame.GetCloseData(out var status, out var parsed);
+        var info = frame.GetCloseInfo();
 
-        status.ShouldBe(WebSocketCloseStatus.GoingAway);
-        parsed.ShouldBe(reason);
+        info.Status.ShouldBe(WireCloseStatus.GoingAway);
+        info.Reason.ShouldBe(reason);
     }
 
     [Fact]
     public async Task CloseFrame_EmptyPayload_ReturnsNullStatus()
     {
         var frame = await Decode(BuildServerFrame(FrameOpCode.Close, true, []));
-        frame.GetCloseData(out var status, out var reason);
-        status.ShouldBeNull();
-        reason.ShouldBeEmpty();
+        var info = frame.GetCloseInfo();
+        info.StatusCode.ShouldBeNull();
+        info.Reason.ShouldBeEmpty();
     }
 
     [Fact]
@@ -159,7 +159,7 @@ public class FrameDecoderTests
     {
         var ex = await Should.ThrowAsync<WebSocketProtocolException>(
             () => Decode(BuildServerFrame(FrameOpCode.Text, true, new byte[4], masked: true)));
-        ex.Message.ShouldContain("servers must not mask");
+        ex.ErrorCode.ShouldBe("FW-PROTO-MASKED-SERVER-FRAME");
     }
 
     [Theory]
@@ -173,7 +173,7 @@ public class FrameDecoderTests
         var wire = new byte[] { (byte)(0x80 | reserved), 0x00 };
         var ex = await Should.ThrowAsync<WebSocketProtocolException>(
             () => FrameDecoder.ReadFrameAsync(new MemoryStream(wire)));
-        ex.Message.ShouldContain("reserved opcode");
+        ex.ErrorCode.ShouldBe("FW-PROTO-RESERVED-OPCODE");
     }
 
     [Fact]
@@ -182,7 +182,7 @@ public class FrameDecoderTests
         var wire = new byte[] { 0x09, 0x00 };
         var ex = await Should.ThrowAsync<WebSocketProtocolException>(
             () => FrameDecoder.ReadFrameAsync(new MemoryStream(wire)));
-        ex.Message.ShouldContain("fragmented");
+        ex.ErrorCode.ShouldBe("FW-PROTO-FRAGMENTED-CONTROL");
     }
 
     [Fact]
@@ -190,7 +190,7 @@ public class FrameDecoderTests
     {
         var ex = await Should.ThrowAsync<WebSocketProtocolException>(
             () => Decode(BuildServerFrame(FrameOpCode.Ping, true, new byte[126])));
-        ex.Message.ShouldContain("125");
+        ex.ErrorCode.ShouldBe("FW-PROTO-CONTROL-PAYLOAD-LARGE");
     }
 
     [Fact]
@@ -200,7 +200,7 @@ public class FrameDecoderTests
             () => FrameDecoder.ReadFrameAsync(
                 new MemoryStream(BuildServerFrame(FrameOpCode.Binary, true, new byte[1000])),
                 maxPayloadBytes: 100));
-        ex.Message.ShouldContain("exceeds the configured maximum");
+        ex.ErrorCode.ShouldBe("FW-PROTO-PAYLOAD-LIMIT");
     }
 
     [Fact]
@@ -230,7 +230,7 @@ public class FrameDecoderTests
 
         var ex = await Should.ThrowAsync<WebSocketProtocolException>(
             () => FrameDecoder.ReadFrameAsync(ms));
-        ex.Message.ShouldContain("most-significant bit");
+        ex.ErrorCode.ShouldBe("FW-PROTO-PAYLOAD-LEN-MSB");
     }
 
     [Fact]
@@ -239,7 +239,7 @@ public class FrameDecoderTests
         var wire = new byte[] { 0x08, 0x00 };
         var ex = await Should.ThrowAsync<WebSocketProtocolException>(
             () => FrameDecoder.ReadFrameAsync(new MemoryStream(wire)));
-        ex.Message.ShouldContain("fragmented");
+        ex.ErrorCode.ShouldBe("FW-PROTO-FRAGMENTED-CONTROL");
     }
 
     [Fact]
@@ -248,29 +248,29 @@ public class FrameDecoderTests
         var wire = new byte[] { 0x0A, 0x00 };
         var ex = await Should.ThrowAsync<WebSocketProtocolException>(
             () => FrameDecoder.ReadFrameAsync(new MemoryStream(wire)));
-        ex.Message.ShouldContain("fragmented");
+        ex.ErrorCode.ShouldBe("FW-PROTO-FRAGMENTED-CONTROL");
     }
 
     [Fact]
     public async Task CloseFrame_StatusCodeOnly_HasEmptyReason()
     {
         var payload = new byte[2];
-        BinaryPrimitives.WriteUInt16BigEndian(payload, (ushort)WebSocketCloseStatus.NormalClosure);
+        BinaryPrimitives.WriteUInt16BigEndian(payload, (ushort)WireCloseStatus.NormalClosure);
 
         var frame = await Decode(BuildServerFrame(FrameOpCode.Close, true, payload));
-        frame.GetCloseData(out var status, out var reason);
+        var info = frame.GetCloseInfo();
 
-        status.ShouldBe(WebSocketCloseStatus.NormalClosure);
-        reason.ShouldBe(string.Empty);
+        info.Status.ShouldBe(WireCloseStatus.NormalClosure);
+        info.Reason.ShouldBe(string.Empty);
     }
 
     [Fact]
     public async Task CloseFrame_OneBytePayload_ReturnsNullStatus()
     {
         var frame = await Decode(BuildServerFrame(FrameOpCode.Close, true, [0x03]));
-        frame.GetCloseData(out var status, out var reason);
-        status.ShouldBeNull();
-        reason.ShouldBe(string.Empty);
+        var info = frame.GetCloseInfo();
+        info.StatusCode.ShouldBeNull();
+        info.Reason.ShouldBe(string.Empty);
     }
 
     [Theory]

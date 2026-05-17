@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using FrameWrench.Core;
+using FrameWrench.Internal;
 
 namespace FrameWrench.Protocol;
 
@@ -51,12 +52,10 @@ internal static class FrameEncoder
         var payloadLen = frame.Payload.Length;
 
         if (frame.IsControl && payloadLen > 125)
-            throw new Core.WebSocketProtocolException(
-                $"Control frame payload may not exceed 125 bytes (was {payloadLen}).");
+            throw FrameWrenchErrors.ControlPayloadTooLarge(payloadLen);
 
         if (frame.IsControl && !frame.IsFinal)
-            throw new Core.WebSocketProtocolException(
-                "Control frames must have the FIN bit set (no fragmentation allowed).");
+            throw FrameWrenchErrors.FragmentedControlFrame(frame.OpCode);
 
         byte byte0 = (byte)(
             (frame.IsFinal ? 0x80 : 0x00) |
