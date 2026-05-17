@@ -42,7 +42,7 @@ internal sealed class PrependStream : Stream
         ValidateBuffer(buffer, offset, count);
 
         var fromPrefix = ReadFromPrefix(buffer, offset, count);
-        if (fromPrefix == count || _prefixOffset >= _prefix.Length)
+        if (fromPrefix == count)
             return fromPrefix;
 
         return fromPrefix + _inner.Read(buffer, offset + fromPrefix, count - fromPrefix);
@@ -57,7 +57,7 @@ internal sealed class PrependStream : Stream
         ValidateBuffer(buffer, offset, count);
 
         var fromPrefix = ReadFromPrefix(buffer, offset, count);
-        if (fromPrefix == count || _prefixOffset >= _prefix.Length)
+        if (fromPrefix == count)
             return fromPrefix;
 
         return fromPrefix + await _inner
