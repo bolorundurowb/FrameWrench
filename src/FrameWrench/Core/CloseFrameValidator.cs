@@ -53,6 +53,20 @@ public static class CloseFrameValidator
     public static WireCloseStatus? TryMapWireStatus(ushort statusCode) =>
         TryMapKnownStatus(statusCode);
 
+    /// <summary>
+    /// Builds the Close frame to send when replying to an inbound Close (echoes status per RFC 6455).
+    /// </summary>
+    internal static WebSocketFrame CreateEchoFrame(CloseFrameInfo closeInfo)
+    {
+        if (closeInfo.Status is WireCloseStatus known)
+            return WebSocketFrame.Close(known);
+
+        if (closeInfo.StatusCode is ushort wire)
+            return WebSocketFrame.Close(wire);
+
+        return WebSocketFrame.Close(WireCloseStatus.NormalClosure);
+    }
+
     private static WireCloseStatus? TryMapKnownStatus(ushort statusCode) =>
         statusCode switch
         {

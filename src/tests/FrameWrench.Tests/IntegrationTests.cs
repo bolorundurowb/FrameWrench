@@ -51,6 +51,17 @@ public sealed class IntegrationTests : IAsyncLifetime
             {
                 var wsCtx = await ctx.AcceptWebSocketAsync(null);
                 var ws = wsCtx.WebSocket;
+                var path = ctx.Request.Url?.AbsolutePath ?? "/";
+
+                if (path.Equals("/close-immediately", StringComparison.OrdinalIgnoreCase))
+                {
+                    await ws.CloseAsync(
+                        System.Net.WebSockets.WebSocketCloseStatus.NormalClosure,
+                        string.Empty,
+                        ct);
+                    return;
+                }
+
                 var buf = new byte[64 * 1024];
 
                 while (ws.State == System.Net.WebSockets.WebSocketState.Open && !ct.IsCancellationRequested)
@@ -104,7 +115,8 @@ public sealed class IntegrationTests : IAsyncLifetime
     public async Task Connect_OpensSuccessfully()
     {
         await using var client = NewClient();
-        await client.ConnectAsync(ServerUri);
+        var result = await client.ConnectAsync(ServerUri);
+        result.SelectedSubProtocol.ShouldBeNull();
         client.State.ShouldBe(global::FrameWrench.Core.WebSocketState.Open);
         await client.CloseAsync();
     }
@@ -432,5 +444,42 @@ public sealed class IntegrationTests : IAsyncLifetime
         await client.CloseAsync();
 
         await Should.NotThrowAsync(() => client.CloseAsync());
+    }
+
+    [Fact]
+    public async Task ReceiveMessageAsync_PeerClosesFirst_ThrowsWebSocketClosedByPeerException()
+    {
+        await using var client = NewClient();
+        await client.ConnectAsync(new Uri($"ws://localhost:{_port}/close-immediately"));
+
+        var ex = await Should.ThrowAsync<WebSocketClosedByPeerException>(
+            () => client.ReceiveMessageAsync());
+
+        ex.CloseInfo.Status.ShouldBe(WireCloseStatus.NormalClosure);
+        ex.ErrorCode.ShouldBe("FW-PEER-CLOSED");
+    }
+
+    [Fact]
+    public async Task ReceiveFramesAsync_SingleFrameConsumer_SecondConsumerThrows()
+    {
+        var options = FrameWrenchOptions.Create()
+            .WithConnectTimeout(TimeSpan.FromSeconds(10))
+            .WithSingleFrameConsumer(true)
+            .Build();
+
+        await using var client = new FrameWrenchClient(options);
+        await client.ConnectAsync(ServerUri);
+
+        using var cts = new CancellationTokenSource();
+        _ = client.ReceiveFrameAsync(cts.Token);
+
+        await Should.ThrowAsync<InvalidOperationException>(async () =>
+        {
+            var second = client.ReceiveFramesAsync(cts.Token).GetAsyncEnumerator();
+            await second.MoveNextAsync();
+        });
+
+        cts.Cancel();
+        await client.CloseAsync();
     }
 }

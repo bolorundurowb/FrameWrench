@@ -39,4 +39,49 @@ public class CloseFrameValidatorTests
         info.StatusCode.ShouldBe((ushort)4000);
         info.Status.ShouldBeNull();
     }
+
+    [Fact]
+    public void ValidateForSend_ApplicationDefinedCode_DoesNotThrow()
+    {
+        Should.NotThrow(() => CloseFrameValidator.ValidateForSend((ushort)4000, null));
+    }
+
+    [Fact]
+    public void ValidateForSend_ReasonTooLong_Throws()
+    {
+        var longReason = new string('x', 200);
+        var ex = Should.Throw<WebSocketProtocolException>(() =>
+            CloseFrameValidator.ValidateForSend(WireCloseStatus.NormalClosure, longReason));
+
+        ex.ErrorCode.ShouldBe("FW-PROTO-CLOSE-REASON-LONG");
+    }
+
+    [Fact]
+    public void ThrowIfInvalidOnWire_ValidApplicationCode_DoesNotThrow()
+    {
+        var payload = new byte[] { 0x0F, 0xA0 };
+        Should.NotThrow(() =>
+            CloseFrameValidator.ThrowIfInvalidOnWire(payload, validateUtf8: false));
+    }
+
+    [Theory]
+    [InlineData(1000, WireCloseStatus.NormalClosure)]
+    [InlineData(4000, null)]
+    public void CreateEchoFrame_PreservesWireStatus(ushort code, WireCloseStatus? expectedStatus)
+    {
+        var info = CloseFrameValidator.Parse(new byte[] { (byte)(code >> 8), (byte)(code & 0xFF) });
+        var echo = CloseFrameValidator.CreateEchoFrame(info);
+
+        echo.GetCloseInfo().StatusCode.ShouldBe(code);
+        echo.GetCloseInfo().Status.ShouldBe(expectedStatus);
+    }
+
+    [Fact]
+    public void CreateEchoFrame_EmptyPayload_UsesNormalClosure()
+    {
+        var info = CloseFrameValidator.Parse(ReadOnlyMemory<byte>.Empty);
+        var echo = CloseFrameValidator.CreateEchoFrame(info);
+
+        echo.GetCloseInfo().Status.ShouldBe(WireCloseStatus.NormalClosure);
+    }
 }

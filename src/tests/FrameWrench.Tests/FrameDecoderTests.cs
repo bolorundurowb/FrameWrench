@@ -234,6 +234,20 @@ public class FrameDecoderTests
     }
 
     [Fact]
+    public async Task SixtyFourBitLength_ExceedsInt32Max_Throws_ProtocolException()
+    {
+        using var ms = new MemoryStream();
+        ms.WriteByte(0x82);
+        ms.WriteByte(0x7F);
+        ms.Write([0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00], 0, 8);
+        ms.Seek(0, SeekOrigin.Begin);
+
+        var ex = await Should.ThrowAsync<WebSocketProtocolException>(
+            () => FrameDecoder.ReadFrameAsync(ms));
+        ex.ErrorCode.ShouldBe("FW-PROTO-PAYLOAD-LEN-OVERFLOW");
+    }
+
+    [Fact]
     public async Task FragmentedCloseFrame_Throws_ProtocolException()
     {
         var wire = new byte[] { 0x08, 0x00 };

@@ -863,7 +863,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     private async Task HandleIncomingCloseAsync(WebSocketFrame frame, CancellationToken ct)
     {
         var closeInfo = frame.GetCloseInfo();
-        var echoFrame = CreateCloseEcho(closeInfo);
+        var echoFrame = CloseFrameValidator.CreateEchoFrame(closeInfo);
 
         if (_state == WebSocketState.CloseSent)
         {
@@ -883,17 +883,6 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
             }
             _state = WebSocketState.Closed;
         }
-    }
-
-    private static WebSocketFrame CreateCloseEcho(CloseFrameInfo closeInfo)
-    {
-        if (closeInfo.Status is WireCloseStatus known)
-            return WebSocketFrame.Close(known);
-
-        if (closeInfo.StatusCode is ushort wire)
-            return WebSocketFrame.Close(wire);
-
-        return WebSocketFrame.Close(WireCloseStatus.NormalClosure);
     }
 
     private async Task AutoPingLoopAsync(CancellationToken ct)
