@@ -1,7 +1,7 @@
 <div align="center">
   <img
     src="https://raw.githubusercontent.com/bolorundurowb/FrameWrench/refs/heads/master/assets/frame-wrench-logo.png"
-    alt="omni assert logo"  />
+    alt="FrameWrench logo"  />
 </div>
 
 # FrameWrench
@@ -59,19 +59,19 @@ FrameWrench fills this gap: a clean, minimal, fully RFC 6455-compliant *client* 
 
 ## Features
 
-| Feature                  | Detail                                                                                                                                                                                                                                     |
-|--------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Frame-level API**      | Send and receive individual frames for all opcodes                                                                                                                                                                                         |
-| **Explicit Ping/Pong**   | `PingAsync` with payload correlation and RTT measurement                                                                                                                                                                                   |
-| **Fragmented messages**  | Send multi-frame messages; receive as individual frames or reassembled                                                                                                                                                                     |
-| **Message-level API**    | `ReceiveMessageAsync` / `SendTextAsync` / `SendBinaryAsync` for simple use cases                                                                                                                                                           |
-| **Async event model**    | `FrameReceived` event fires for every incoming frame                                                                                                                                                                                       |
-| **Async streaming**      | `GetFrameStream()` returns `IAsyncEnumerable<WebSocketFrame>`                                                                                                                                                                              |
-| **TLS support**          | Full `wss://` with configurable `SslProtocols` and cert validation callback                                                                                                                                                                |
-| **Auto-Ping (opt-in)**   | Configurable keepalive via `FrameWrenchOptions.AutoPing`                                                                                                                                                                                   |
-| **Zero WS dependencies** | No WebSocket-specific NuGet packages; only Microsoft BCL shims (`System.Memory`, `System.Threading.Channels`, and others), with **per-target** direct dependencies so **net48** / **netstandard2.0** do not pull packages they do not need |
-| **Logger-agnostic**      | No `ILogger` or logging package dependency - use NLog, Serilog, `Trace`, or your own wrappers around `FrameReceived` / exceptions                                                                                                          |
-| **Target frameworks**    | `net462`, `net48`, `netstandard2.0`                                                                                                                                                                                                        |
+| Feature                  | Detail                                                                                                                                                                                         |
+|--------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Frame-level API**      | Send and receive individual frames for all opcodes                                                                                                                                             |
+| **Explicit Ping/Pong**   | `PingAsync` with payload correlation and RTT measurement                                                                                                                                       |
+| **Fragmented messages**  | Send multi-frame messages; receive as individual frames or reassembled                                                                                                                         |
+| **Message-level API**    | `ReceiveMessageAsync` / `SendTextAsync` / `SendBinaryAsync` for simple use cases                                                                                                               |
+| **Async event model**    | `FrameReceived` event fires for every incoming frame                                                                                                                                           |
+| **Async streaming**      | `GetFrameStream()` returns `IAsyncEnumerable<WebSocketFrame>`                                                                                                                                  |
+| **TLS support**          | Full `wss://` with configurable `SslProtocols` and cert validation callback                                                                                                                    |
+| **Auto-Ping (opt-in)**   | Configurable keepalive via `FrameWrenchOptions.AutoPing`                                                                                                                                       |
+| **Zero WS dependencies** | No WebSocket-specific NuGet packages; only Microsoft BCL shims (`System.Memory`, `System.Threading.Channels`, and others) required for the older targets (`net462`, `net48`, `netstandard2.0`) |
+| **Logger-agnostic**      | No `ILogger` or logging package dependency - use NLog, Serilog, `Trace`, or your own wrappers around `FrameReceived` / exceptions                                                              |
+| **Target frameworks**    | `net462`, `net48`, `netstandard2.0`                                                                                                                                                            |
 
 
 ## Installation
@@ -87,14 +87,14 @@ dotnet add package FrameWrench
 To pin a specific version:
 
 ```bash
-dotnet add package FrameWrench --version 1.0.2
+dotnet add package FrameWrench --version 1.0.3
 ```
 
 ### Project file
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="FrameWrench" Version="1.0.2" />
+  <PackageReference Include="FrameWrench" Version="1.0.3" />
 </ItemGroup>
 ```
 
@@ -248,7 +248,7 @@ await client.CloseAsync(
 ```
 
 
-## Configuration - FrameWrenchOptions
+## Configuration – FrameWrenchOptions
 
 ```csharp
 var options = new FrameWrenchOptions
@@ -455,17 +455,6 @@ Prefer **`await client.DisposeAsync()`** (or `await using`) over **`Dispose()`**
 | `netstandard2.0` | .NET Core 2.x, .NET Core 3.x, .NET 5, .NET 6, .NET 7, .NET 8+ |
 
 
-## Running the Example
-
-```bash
-# Against the public echo server (requires internet; URL may change)
-dotnet run --project samples/FrameWrench.Example --framework net48
-
-# Against a local server
-dotnet run --project samples/FrameWrench.Example --framework net48 -- ws://localhost:9000/ws
-```
-
-
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for branch workflow, tests, XML documentation style, and CI/coverage setup.
@@ -477,4 +466,4 @@ MIT - see `LICENSE` for details.
 
 ## Acknowledgements
 
-- [RFC 6455 - The WebSocket Protocol](https://datatracker.ietf.org/doc/html/rfc6455)
+- [RFC 6455 – The WebSocket Protocol](https://datatracker.ietf.org/doc/html/rfc6455)
