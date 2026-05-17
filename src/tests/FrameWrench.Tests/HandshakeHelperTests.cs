@@ -297,4 +297,94 @@ public class HandshakeHelperTests
                 CancellationToken.None,
                 new[] { "chat.v1", "chat.v2" }));
     }
+
+    [Fact]
+    public async Task ValidateResponse_NoSubProtocolHeader_ReturnsNull()
+    {
+        const string accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
+        var response =
+            "HTTP/1.1 101 Switching Protocols\r\n" +
+            "Upgrade: websocket\r\n" +
+            "Connection: Upgrade\r\n" +
+            $"Sec-WebSocket-Accept: {accept}\r\n" +
+            "\r\n";
+
+        var selected = await HandshakeHelper.ValidateResponseAsync(
+            ResponseStream(response), accept, CancellationToken.None,
+            new[] { "chat.v1" });
+
+        selected.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task ValidateResponse_ConnectionHeaderContainsUpgradeAmongOtherValues_Passes()
+    {
+        const string accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
+        var response =
+            "HTTP/1.1 101 Switching Protocols\r\n" +
+            "Upgrade: websocket\r\n" +
+            "Connection: keep-alive, Upgrade\r\n" +
+            $"Sec-WebSocket-Accept: {accept}\r\n" +
+            "\r\n";
+
+        await Should.NotThrowAsync(async () =>
+        {
+            _ = await HandshakeHelper.ValidateResponseAsync(
+                ResponseStream(response), accept, CancellationToken.None);
+        });
+    }
+
+    [Fact]
+    public void BuildRequest_UriWithQueryString_IncludesPathAndQuery()
+    {
+        var (_, key) = HandshakeHelper.GenerateKey();
+        var text = System.Text.Encoding.ASCII.GetString(
+            HandshakeHelper.BuildRequest(new Uri("ws://example.com/chat?room=1"), key));
+
+        text.ShouldContain("GET /chat?room=1 HTTP/1.1");
+    }
+
+    [Fact]
+    public void BuildRequest_RootPath_UsesSlash()
+    {
+        var (_, key) = HandshakeHelper.GenerateKey();
+        var text = System.Text.Encoding.ASCII.GetString(
+            HandshakeHelper.BuildRequest(new Uri("ws://example.com/"), key));
+
+        text.ShouldContain("GET / HTTP/1.1");
+    }
+
+    [Fact]
+    public void BuildRequest_MultipleExtraHeaders_AllIncluded()
+    {
+        var (_, key) = HandshakeHelper.GenerateKey();
+        var extra = new Dictionary<string, string>
+        {
+            ["Authorization"] = "Bearer abc",
+            ["Origin"] = "https://example.com"
+        };
+        var text = System.Text.Encoding.ASCII.GetString(
+            HandshakeHelper.BuildRequest(new Uri("ws://example.com/"), key, extra));
+
+        text.ShouldContain("Authorization: Bearer abc");
+        text.ShouldContain("Origin: https://example.com");
+    }
+
+    [Fact]
+    public async Task ValidateResponse_UpgradeHeaderIsCaseInsensitive_Passes()
+    {
+        const string accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
+        var response =
+            "HTTP/1.1 101 Switching Protocols\r\n" +
+            "Upgrade: WebSocket\r\n" +
+            "Connection: Upgrade\r\n" +
+            $"Sec-WebSocket-Accept: {accept}\r\n" +
+            "\r\n";
+
+        await Should.NotThrowAsync(async () =>
+        {
+            _ = await HandshakeHelper.ValidateResponseAsync(
+                ResponseStream(response), accept, CancellationToken.None);
+        });
+    }
 }
