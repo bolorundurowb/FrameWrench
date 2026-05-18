@@ -195,4 +195,14 @@ public class IncomingUtf8MessageValidatorTests
         v.OnDataFrame(C(U("lo"), fin: true));
         v.OnDataFrame(T(U("next"), fin: true));
     }
+
+    [Fact]
+    public void FragmentedText_FinalContinuationWithUtf8Disabled_ClearsBufferForNextMessage()
+    {
+        var v = new IncomingUtf8MessageValidator();
+        v.OnDataFrame(T([0xC2], fin: false), validateUtf8: true);
+        v.OnDataFrame(C([0xA9], fin: true), validateUtf8: false);
+        v.OnDataFrame(T([0xC2], fin: false), validateUtf8: true);
+        v.OnDataFrame(C([0xA9], fin: true), validateUtf8: true);
+    }
 }

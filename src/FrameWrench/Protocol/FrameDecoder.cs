@@ -1,40 +1,11 @@
 using System.Buffers.Binary;
 using FrameWrench.Core;
+using FrameWrench.Internal;
 
 namespace FrameWrench.Protocol;
 
-/// <summary>
-/// Reads raw bytes from a <see cref="Stream"/> and parses them into
-/// <see cref="WebSocketFrame"/> instances following RFC 6455 §5.2.
-/// </summary>
-/// <remarks>
-/// <para>
-/// The decoder assumes server-to-client framing.  Per RFC 6455 §5.1, a server
-/// MUST NOT mask frames sent to a client; masked server frames are treated as a
-/// protocol error.
-/// </para>
-/// <para>
-/// Callers should issue <see cref="ReadFrameAsync"/> sequentially from a single
-/// reader loop to avoid interleaved reads on the underlying stream.
-/// </para>
-/// </remarks>
 internal static class FrameDecoder
 {
-    /// <summary>
-    /// Asynchronously reads the next WebSocket frame from <paramref name="stream"/>.
-    /// </summary>
-    /// <param name="stream">The source stream positioned at the start of a frame.</param>
-    /// <param name="maxPayloadBytes">
-    /// Maximum accepted payload length in bytes (default: 64 MiB).
-    /// </param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>The fully decoded, unmasked frame.</returns>
-    /// <exception cref="WebSocketProtocolException">
-    /// Thrown on any RFC 6455 protocol violation detected during decoding.
-    /// </exception>
-    /// <exception cref="EndOfStreamException">
-    /// Thrown if the connection closes unexpectedly while reading a frame.
-    /// </exception>
     public static async Task<WebSocketFrame> ReadFrameAsync(
         Stream stream,
         int maxPayloadBytes = 64 * 1024 * 1024,
@@ -56,17 +27,10 @@ internal static class FrameDecoder
         int len7 = byte1 & 0x7F;
 
         if (masked)
-            throw new WebSocketProtocolException(
-                "Received a masked frame from the server. " +
-                "Per RFC 6455 §5.1, servers must not mask frames sent to a client.");
+            throw FrameWrenchErrors.MaskedServerFrame(WebSocketState.Open);
 
-        // RFC 6455 §5.2: RSV1–RSV3 MUST be 0 unless defined by a negotiated extension.
-        // FrameWrench does not negotiate any per-message extensions, so any non-zero RSV
-        // bit is a protocol error.
         if (rsv1 || rsv2 || rsv3)
-            throw new WebSocketProtocolException(
-                $"Received frame with non-zero RSV bits (RSV1={rsv1}, RSV2={rsv2}, RSV3={rsv3}). " +
-                "RFC 6455 §5.2 requires RSV bits to be 0 unless a negotiated extension defines their use.");
+            throw FrameWrenchErrors.NonZeroRsv(rsv1, rsv2, rsv3);
 
         ValidateOpCode(opCode, fin);
 
@@ -82,29 +46,26 @@ internal static class FrameDecoder
             await ReadExactAsync(stream, extBuf, 0, 2, ct).ConfigureAwait(false);
             payloadLen = BinaryPrimitives.ReadUInt16BigEndian(extBuf);
         }
-        else // len7 == 127
+        else
         {
             var extBuf = new byte[8];
             await ReadExactAsync(stream, extBuf, 0, 8, ct).ConfigureAwait(false);
             ulong raw = BinaryPrimitives.ReadUInt64BigEndian(extBuf);
 
             if ((raw & 0x8000_0000_0000_0000UL) != 0)
-                throw new WebSocketProtocolException(
-                    "64-bit payload length has the most-significant bit set, which is prohibited " +
-                    "by RFC 6455 §5.2.");
+                throw FrameWrenchErrors.InvalidPayloadLengthMsb();
 
             payloadLen = (long)raw;
         }
 
         if (IsControlOpCode(opCode) && payloadLen > 125)
-            throw new WebSocketProtocolException(
-                $"Control frame payload exceeds 125 bytes (received {payloadLen} bytes). " +
-                "RFC 6455 §5.5 prohibits this.");
+            throw FrameWrenchErrors.ControlPayloadTooLarge(payloadLen);
+
+        if (payloadLen > int.MaxValue)
+            throw FrameWrenchErrors.PayloadLengthOverflow();
 
         if (payloadLen > maxPayloadBytes)
-            throw new WebSocketProtocolException(
-                $"Frame payload ({payloadLen:N0} bytes) exceeds the configured maximum of " +
-                $"{maxPayloadBytes:N0} bytes.");
+            throw FrameWrenchErrors.PayloadTooLarge(payloadLen, maxPayloadBytes, nameof(FrameWrenchOptions.MaxFramePayloadBytes));
 
         var payload = await ReadPayloadAsync(stream, (int)payloadLen, ct)
             .ConfigureAwait(false);
@@ -112,25 +73,19 @@ internal static class FrameDecoder
         return new WebSocketFrame(opCode, fin, payload, rsv1, rsv2, rsv3);
     }
 
-    /// <summary>
-    /// Reads exactly <paramref name="length"/> bytes into a precisely-sized owned array.
-    /// </summary>
     private static async Task<byte[]> ReadPayloadAsync(
         Stream stream,
         int length,
         CancellationToken ct)
     {
-        if (length == 0) return [];
+        if (length == 0)
+            return [];
 
-        var payload = new byte[length];
-        await ReadExactAsync(stream, payload, 0, length, ct).ConfigureAwait(false);
-        return payload;
+        var result = new byte[length];
+        await ReadExactAsync(stream, result, 0, length, ct).ConfigureAwait(false);
+        return result;
     }
 
-    /// <summary>
-    /// Reads exactly <paramref name="count"/> bytes into <paramref name="buffer"/>
-    /// at <paramref name="offset"/>.  Throws <see cref="EndOfStreamException"/> on EOF.
-    /// </summary>
     private static async Task ReadExactAsync(
         Stream stream,
         byte[] buffer,
@@ -160,14 +115,10 @@ internal static class FrameDecoder
         byte raw = (byte)opCode;
 
         if ((raw >= 0x3 && raw <= 0x7) || (raw >= 0xB && raw <= 0xF))
-            throw new WebSocketProtocolException(
-                $"Received frame with reserved opcode 0x{raw:X1}. " +
-                "Reserved opcodes require prior extension negotiation.");
+            throw FrameWrenchErrors.ReservedOpcode(raw, fin);
 
         if (IsControlOpCode(opCode) && !fin)
-            throw new WebSocketProtocolException(
-                $"Control frame (opcode {opCode}) has the FIN bit cleared. " +
-                "RFC 6455 §5.5 prohibits fragmented control frames.");
+            throw FrameWrenchErrors.FragmentedControlFrame(opCode);
     }
 
     private static bool IsControlOpCode(FrameOpCode op) =>

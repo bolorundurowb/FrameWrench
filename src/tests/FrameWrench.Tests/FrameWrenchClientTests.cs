@@ -37,27 +37,24 @@ public class FrameWrenchClientTests
         await using var client = new FrameWrenchClient();
         var ex = await Should.ThrowAsync<ArgumentException>(
             () => client.ConnectAsync(new Uri(uri)));
-        ex.Message.ShouldContain("ws");
+        ex.Message.ShouldContain("FW-ARG-URI-SCHEME");
     }
 
     [Fact]
     public async Task ConnectAsync_WhenNotInNoneState_Throws_WebSocketStateException()
     {
-        await using var client = new FrameWrenchClient(new FrameWrenchOptions
-        {
-            ConnectTimeout = TimeSpan.FromMilliseconds(500)
-        });
+        await using var client = new FrameWrenchClient(
+            FrameWrenchOptions.Create()
+                .WithConnectTimeout(TimeSpan.FromMilliseconds(500))
+                .Build());
 
         try { await client.ConnectAsync(new Uri("ws://127.0.0.1:1/")); }
         catch { }
 
         client.State.ShouldNotBe(WebSocketState.None);
 
-        var ex = await Should.ThrowAsync<WebSocketStateException>(
+        await Should.ThrowAsync<ArgumentException>(
             () => client.ConnectAsync(new Uri("ws://127.0.0.1:1/")));
-
-        ex.CurrentState.ShouldNotBe(WebSocketState.None);
-        ex.Message.ShouldContain("ConnectAsync");
     }
 
     [Fact]

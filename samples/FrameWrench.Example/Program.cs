@@ -18,12 +18,10 @@ public static class Program
         Console.WriteLine($"Target URI: {uri}");
         Console.WriteLine();
 
-        var options = new FrameWrenchOptions
-        {
-            ConnectTimeout = TimeSpan.FromSeconds(15),
-            PingTimeout = TimeSpan.FromSeconds(10),
-            AutoPing = false,
-        };
+        var options = FrameWrenchOptions.Create()
+            .WithConnectTimeout(TimeSpan.FromSeconds(15))
+            .WithPingTimeout(TimeSpan.FromSeconds(10))
+            .Build();
 
         await using var client = new FrameWrenchClient(options);
 
@@ -51,12 +49,12 @@ public static class Program
         var pingPayload = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF };
         Console.WriteLine($"  Sending Ping with payload (hex): {BytesToHex(pingPayload)}");
 
-        var (pongReceived, roundtrip) = await client.PingAsync(
+        var pingResult = await client.PingAsync(
             payload: pingPayload,
             timeout: TimeSpan.FromSeconds(10));
 
-        if (pongReceived)
-            Console.WriteLine($"  Pong received. Round-trip time: {roundtrip.TotalMilliseconds:0.00} ms.");
+        if (pingResult.PongReceived)
+            Console.WriteLine($"  Pong received. Round-trip time: {pingResult.Elapsed.TotalMilliseconds:0.00} ms.");
         else
             Console.WriteLine("  Pong was not received (timed out).");
 
@@ -71,12 +69,12 @@ public static class Program
         Console.WriteLine("  Sending frame 2/2: Continuation opcode, FIN=true (\"Hello!\")");
         await client.SendFrameAsync(FrameOpCode.Continuation, part2Bytes, isFinal: true);
 
-        Console.WriteLine("  Receiving via GetFrameStream (one frame at a time):");
+        Console.WriteLine("  Receiving via ReceiveFramesAsync (one frame at a time):");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var collected = new List<WebSocketFrame>();
 
-        await foreach (var frame in client.GetFrameStream(cts.Token))
+        await foreach (var frame in client.ReceiveFramesAsync(cts.Token))
         {
             if (frame.IsControl)
             {
@@ -103,7 +101,7 @@ public static class Program
         Console.WriteLine($"  Echo binary: {BytesToHex(binMsg.Payload.ToArray())}");
 
         PrintStep(7, "Close handshake");
-        await client.CloseAsync(WebSocketCloseStatus.NormalClosure, "Example complete.");
+        await client.CloseAsync(WireCloseStatus.NormalClosure, "Example complete.");
         Console.WriteLine($"  Final connection state: {client.State}");
 
         Console.WriteLine();

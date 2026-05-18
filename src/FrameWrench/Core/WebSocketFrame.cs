@@ -87,35 +87,18 @@ public sealed class WebSocketFrame
         Utf8StringUtil.GetString(Payload);
 
     /// <summary>
-    /// Extracts the close status code and reason phrase from a <see cref="FrameOpCode.Close"/> frame.
+    /// Parses Close frame payload into <see cref="CloseFrameInfo"/>.
     /// </summary>
-    /// <param name="statusCode">
-    /// The big-endian 16-bit status code, or <c>null</c> when the payload is shorter than 2 bytes.
-    /// </param>
-    /// <param name="reason">
-    /// The UTF-8 reason phrase after the status code, or <see cref="string.Empty"/> when absent.
-    /// </param>
     /// <exception cref="InvalidOperationException">
     /// Thrown when <see cref="OpCode"/> is not <see cref="FrameOpCode.Close"/>.
     /// </exception>
-    public void GetCloseData(out WebSocketCloseStatus? statusCode, out string reason)
+    public CloseFrameInfo GetCloseInfo()
     {
         if (OpCode != FrameOpCode.Close)
             throw new InvalidOperationException(
-                $"GetCloseData may only be invoked on Close frames (this frame's opcode is {OpCode}).");
+                $"GetCloseInfo may only be invoked on Close frames (this frame's opcode is {OpCode}).");
 
-        var span = Payload.Span;
-        if (span.Length < 2)
-        {
-            statusCode = null;
-            reason = string.Empty;
-            return;
-        }
-
-        statusCode = (WebSocketCloseStatus)((span[0] << 8) | span[1]);
-        reason = span.Length > 2
-            ? Utf8StringUtil.GetString(Payload.Slice(2))
-            : string.Empty;
+        return CloseFrameValidator.Parse(Payload);
     }
 
     /// <summary>Creates a Text frame with a UTF-8 encoded payload.</summary>
@@ -170,17 +153,24 @@ public sealed class WebSocketFrame
     /// </param>
     /// <returns>A new Close <see cref="WebSocketFrame"/>.</returns>
     public static WebSocketFrame Close(
-        WebSocketCloseStatus status = WebSocketCloseStatus.NormalClosure,
-        string? reason = null)
+        WireCloseStatus status = WireCloseStatus.NormalClosure,
+        string? reason = null) =>
+        Close((ushort)status, reason);
+
+    /// <summary>
+    /// Creates a Close frame with any wire-valid status code (including application-defined 3000–4999).
+    /// </summary>
+    public static WebSocketFrame Close(ushort statusCode, string? reason = null)
     {
+        CloseFrameValidator.ValidateForSend(statusCode, reason);
+
         var reasonBytes = reason is { Length: > 0 }
             ? Encoding.UTF8.GetBytes(reason)
             : [];
 
         var payload = new byte[2 + reasonBytes.Length];
-        var code = (ushort)status;
-        payload[0] = (byte)(code >> 8);
-        payload[1] = (byte)(code & 0xFF);
+        payload[0] = (byte)(statusCode >> 8);
+        payload[1] = (byte)(statusCode & 0xFF);
         if (reasonBytes.Length > 0)
             reasonBytes.CopyTo(payload, 2);
 

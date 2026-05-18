@@ -139,7 +139,7 @@ public class FrameEncoderTests
         var frame = new WebSocketFrame(FrameOpCode.Ping, true, new byte[126]);
         var ex = await Should.ThrowAsync<WebSocketProtocolException>(
             async () => await EncodeAsync(frame));
-        ex.Message.ShouldContain("125");
+        ex.ErrorCode.ShouldBe("FW-PROTO-CONTROL-PAYLOAD-LARGE");
     }
 
     [Fact]
@@ -148,27 +148,27 @@ public class FrameEncoderTests
         var frame = new WebSocketFrame(FrameOpCode.Ping, isFinal: false, Array.Empty<byte>());
         var ex = await Should.ThrowAsync<WebSocketProtocolException>(
             async () => await EncodeAsync(frame));
-        ex.Message.ShouldContain("FIN");
+        ex.ErrorCode.ShouldBe("FW-PROTO-FRAGMENTED-CONTROL");
     }
 
     [Fact]
     public async Task CloseFrame_EncodesStatusAndReason()
     {
-        var bytes = await EncodeAsync(WebSocketFrame.Close(WebSocketCloseStatus.GoingAway, "bye"));
+        var bytes = await EncodeAsync(WebSocketFrame.Close(WireCloseStatus.GoingAway, "bye"));
         bytes[0].ShouldBe((byte)0x88);
         var payloadLen = bytes[1] & 0x7F;
         payloadLen.ShouldBeGreaterThan(2);
         BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(2, 2))
-            .ShouldBe((ushort)WebSocketCloseStatus.GoingAway);
+            .ShouldBe((ushort)WireCloseStatus.GoingAway);
     }
 
     [Fact]
     public async Task CloseFrame_NoReason_TotalLengthIsHeaderPlusTwoBytes()
     {
-        var bytes = await EncodeAsync(WebSocketFrame.Close(WebSocketCloseStatus.NormalClosure));
+        var bytes = await EncodeAsync(WebSocketFrame.Close(WireCloseStatus.NormalClosure));
         bytes.Length.ShouldBe(2 + 2, "header(2) + status(2) only when no reason supplied");
         BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(2, 2))
-            .ShouldBe((ushort)WebSocketCloseStatus.NormalClosure);
+            .ShouldBe((ushort)WireCloseStatus.NormalClosure);
     }
 
     [Fact]

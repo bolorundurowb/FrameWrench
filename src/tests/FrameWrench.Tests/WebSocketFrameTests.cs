@@ -61,7 +61,7 @@ public class WebSocketFrameTests
     [Fact]
     public void Close_Factory_EncodesStatusCode_NormalClosure()
     {
-        var frame = WebSocketFrame.Close(WebSocketCloseStatus.NormalClosure);
+        var frame = WebSocketFrame.Close(WireCloseStatus.NormalClosure);
         frame.OpCode.ShouldBe(FrameOpCode.Close);
         frame.Payload.Length.ShouldBe(2);
         frame.Payload.Span[0].ShouldBe((byte)0x03);
@@ -69,19 +69,28 @@ public class WebSocketFrameTests
     }
 
     [Fact]
-    public void Close_Factory_EncodesStatusAndReason()
+    public void Close_Factory_EncodesApplicationDefinedStatusCode()
     {
-        var frame = WebSocketFrame.Close(WebSocketCloseStatus.GoingAway, "bye");
-        frame.GetCloseData(out var status, out var reason);
-        status.ShouldBe(WebSocketCloseStatus.GoingAway);
-        reason.ShouldBe("bye");
+        var frame = WebSocketFrame.Close(4000);
+        frame.GetCloseInfo().StatusCode.ShouldBe((ushort)4000);
+        frame.Payload.Span[0].ShouldBe((byte)0x0F);
+        frame.Payload.Span[1].ShouldBe((byte)0xA0);
     }
 
     [Fact]
-    public void GetCloseData_OnNonCloseFrame_Throws()
+    public void Close_Factory_EncodesStatusAndReason()
+    {
+        var frame = WebSocketFrame.Close(WireCloseStatus.GoingAway, "bye");
+        var info = frame.GetCloseInfo();
+        info.Status.ShouldBe(WireCloseStatus.GoingAway);
+        info.Reason.ShouldBe("bye");
+    }
+
+    [Fact]
+    public void GetCloseInfo_OnNonCloseFrame_Throws()
     {
         Should.Throw<InvalidOperationException>(() =>
-            WebSocketFrame.Text("x").GetCloseData(out _, out _));
+            WebSocketFrame.Text("x").GetCloseInfo());
     }
 
     [Fact]
@@ -149,21 +158,21 @@ public class WebSocketFrameTests
     }
 
     [Fact]
-    public void Close_NullReason_GetCloseData_ReturnsEmptyReason()
+    public void Close_NullReason_GetCloseInfo_ReturnsEmptyReason()
     {
-        var frame = WebSocketFrame.Close(WebSocketCloseStatus.NormalClosure, null);
-        frame.GetCloseData(out var status, out var reason);
-        status.ShouldBe(WebSocketCloseStatus.NormalClosure);
-        reason.ShouldBe(string.Empty);
+        var frame = WebSocketFrame.Close(WireCloseStatus.NormalClosure, null);
+        var info = frame.GetCloseInfo();
+        info.Status.ShouldBe(WireCloseStatus.NormalClosure);
+        info.Reason.ShouldBe(string.Empty);
     }
 
     [Fact]
-    public void GetCloseData_OneBytePayload_ReturnsNullStatus()
+    public void GetCloseInfo_OneBytePayload_ReturnsNullStatus()
     {
         var frame = new WebSocketFrame(FrameOpCode.Close, true, new byte[] { 0x03 });
-        frame.GetCloseData(out var status, out var reason);
-        status.ShouldBeNull();
-        reason.ShouldBe(string.Empty);
+        var info = frame.GetCloseInfo();
+        info.StatusCode.ShouldBeNull();
+        info.Reason.ShouldBe(string.Empty);
     }
 
     [Fact]

@@ -51,6 +51,17 @@ public sealed class IntegrationTests : IAsyncLifetime
             {
                 var wsCtx = await ctx.AcceptWebSocketAsync(null);
                 var ws = wsCtx.WebSocket;
+                var path = ctx.Request.Url?.AbsolutePath ?? "/";
+
+                if (path.Equals("/close-immediately", StringComparison.OrdinalIgnoreCase))
+                {
+                    await ws.CloseAsync(
+                        System.Net.WebSockets.WebSocketCloseStatus.NormalClosure,
+                        string.Empty,
+                        ct);
+                    return;
+                }
+
                 var buf = new byte[64 * 1024];
 
                 while (ws.State == System.Net.WebSockets.WebSocketState.Open && !ct.IsCancellationRequested)
@@ -95,17 +106,17 @@ public sealed class IntegrationTests : IAsyncLifetime
     private Uri ServerUri => new($"ws://localhost:{_port}/");
 
     private static FrameWrenchClient NewClient() =>
-        new(new FrameWrenchOptions
-        {
-            ConnectTimeout = TimeSpan.FromSeconds(10),
-            PingTimeout = TimeSpan.FromSeconds(5),
-        });
+        new(FrameWrenchOptions.Create()
+            .WithConnectTimeout(TimeSpan.FromSeconds(10))
+            .WithPingTimeout(TimeSpan.FromSeconds(5))
+            .Build());
 
     [Fact]
     public async Task Connect_OpensSuccessfully()
     {
         await using var client = NewClient();
-        await client.ConnectAsync(ServerUri);
+        var result = await client.ConnectAsync(ServerUri);
+        result.SelectedSubProtocol.ShouldBeNull();
         client.State.ShouldBe(global::FrameWrench.Core.WebSocketState.Open);
         await client.CloseAsync();
     }
@@ -147,11 +158,11 @@ public sealed class IntegrationTests : IAsyncLifetime
         await using var client = NewClient();
         await client.ConnectAsync(ServerUri);
 
-        var (received, roundtrip) = await client.PingAsync(
+        var pingResult = await client.PingAsync(
             timeout: TimeSpan.FromSeconds(5));
 
-        received.ShouldBeTrue("The server must respond to Ping with a Pong.");
-        roundtrip.ShouldBeLessThan(TimeSpan.FromSeconds(5));
+        pingResult.PongReceived.ShouldBeTrue("The server must respond to Ping with a Pong.");
+        pingResult.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(5));
 
         await client.CloseAsync();
     }
@@ -162,11 +173,11 @@ public sealed class IntegrationTests : IAsyncLifetime
         await using var client = NewClient();
         await client.ConnectAsync(ServerUri);
 
-        var (received, _) = await client.PingAsync(
+        var pingResult = await client.PingAsync(
             payload: new byte[] { 0xDE, 0xAD, 0xBE, 0xEF },
             timeout: TimeSpan.FromSeconds(5));
 
-        received.ShouldBeTrue();
+        pingResult.PongReceived.ShouldBeTrue();
 
         await client.CloseAsync();
     }
@@ -199,7 +210,7 @@ public sealed class IntegrationTests : IAsyncLifetime
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         var frames = new List<WebSocketFrame>();
 
-        await foreach (var frame in client.GetFrameStream(cts.Token))
+        await foreach (var frame in client.ReceiveFramesAsync(cts.Token))
         {
             if (frame.IsControl) continue;
             frames.Add(frame);
@@ -242,7 +253,7 @@ public sealed class IntegrationTests : IAsyncLifetime
         await using var client = NewClient();
         await client.ConnectAsync(ServerUri);
 
-        await client.CloseAsync(global::FrameWrench.Core.WebSocketCloseStatus.NormalClosure, "done");
+        await client.CloseAsync(global::FrameWrench.Core.WireCloseStatus.NormalClosure, "done");
 
         client.State.ShouldNotBe(global::FrameWrench.Core.WebSocketState.Open);
     }
@@ -293,7 +304,7 @@ public sealed class IntegrationTests : IAsyncLifetime
         var ex = await Should.ThrowAsync<ArgumentException>(
             () => client.PingAsync(payload: oversized));
 
-        ex.Message.ShouldContain("125");
+        ex.Message.ShouldContain("FW-ARG-PING-PAYLOAD");
 
         await client.CloseAsync();
     }
@@ -312,11 +323,10 @@ public sealed class IntegrationTests : IAsyncLifetime
     [Fact]
     public async Task ReceiveMessageAsync_MaxMessagePayloadExceeded_Throws()
     {
-        var options = new FrameWrenchOptions
-        {
-            ConnectTimeout = TimeSpan.FromSeconds(10),
-            MaxMessagePayloadBytes = 3,
-        };
+        var options = FrameWrenchOptions.Create()
+            .WithConnectTimeout(TimeSpan.FromSeconds(10))
+            .WithMaxMessagePayloadBytes(3)
+            .Build();
 
         await using var client = new FrameWrenchClient(options);
         await client.ConnectAsync(ServerUri);
@@ -419,7 +429,7 @@ public sealed class IntegrationTests : IAsyncLifetime
         await client.ConnectAsync(ServerUri);
 
         await client.CloseAsync(
-            global::FrameWrench.Core.WebSocketCloseStatus.GoingAway,
+            global::FrameWrench.Core.WireCloseStatus.GoingAway,
             "shutting down");
 
         client.State.ShouldNotBe(global::FrameWrench.Core.WebSocketState.Open);
@@ -434,5 +444,42 @@ public sealed class IntegrationTests : IAsyncLifetime
         await client.CloseAsync();
 
         await Should.NotThrowAsync(() => client.CloseAsync());
+    }
+
+    [Fact]
+    public async Task ReceiveMessageAsync_PeerClosesFirst_ThrowsWebSocketClosedByPeerException()
+    {
+        await using var client = NewClient();
+        await client.ConnectAsync(new Uri($"ws://localhost:{_port}/close-immediately"));
+
+        var ex = await Should.ThrowAsync<WebSocketClosedByPeerException>(
+            () => client.ReceiveMessageAsync());
+
+        ex.CloseInfo.Status.ShouldBe(WireCloseStatus.NormalClosure);
+        ex.ErrorCode.ShouldBe("FW-PEER-CLOSED");
+    }
+
+    [Fact]
+    public async Task ReceiveFramesAsync_SingleFrameConsumer_SecondConsumerThrows()
+    {
+        var options = FrameWrenchOptions.Create()
+            .WithConnectTimeout(TimeSpan.FromSeconds(10))
+            .WithSingleFrameConsumer(true)
+            .Build();
+
+        await using var client = new FrameWrenchClient(options);
+        await client.ConnectAsync(ServerUri);
+
+        using var cts = new CancellationTokenSource();
+        _ = client.ReceiveFrameAsync(cts.Token);
+
+        await Should.ThrowAsync<InvalidOperationException>(async () =>
+        {
+            var second = client.ReceiveFramesAsync(cts.Token).GetAsyncEnumerator();
+            await second.MoveNextAsync();
+        });
+
+        cts.Cancel();
+        await client.CloseAsync();
     }
 }
