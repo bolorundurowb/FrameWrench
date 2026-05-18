@@ -98,12 +98,7 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
 
     // SingleWriter=true because only the receive pump pushes frames; this lets the channel
     // skip internal writer-concurrency bookkeeping.
-    private readonly Channel<WebSocketFrame> _frameChannel =
-        Channel.CreateUnbounded<WebSocketFrame>(new UnboundedChannelOptions
-        {
-            SingleReader = false,
-            SingleWriter = true,
-        });
+    private readonly Channel<WebSocketFrame> _frameChannel;
 
     private Task? _pumpTask;
     private CancellationTokenSource? _pumpCts;

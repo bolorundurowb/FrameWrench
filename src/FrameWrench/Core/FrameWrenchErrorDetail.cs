@@ -37,9 +37,6 @@ public sealed class FrameWrenchErrorDetail
         Operation = operation;
     }
 
-    private static readonly IReadOnlyDictionary<string, string> EmptyContext =
-        new Dictionary<string, string>();
-
     /// <summary>Stable error identifier, e.g. <c>FW-PROTO-MASKED-SERVER-FRAME</c>.</summary>
     public string Code { get; }
 
