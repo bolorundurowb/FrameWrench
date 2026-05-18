@@ -37,6 +37,8 @@ internal sealed class OutgoingUtf8MessageValidator
 
                 if (!frame.IsFinal)
                     _kind = FragKind.Text;
+                else
+                    EndMessage();
 
                 break;
 

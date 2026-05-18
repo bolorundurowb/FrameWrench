@@ -69,7 +69,7 @@ public static class Program
         Console.WriteLine("  Sending frame 2/2: Continuation opcode, FIN=true (\"Hello!\")");
         await client.SendFrameAsync(FrameOpCode.Continuation, part2Bytes, isFinal: true);
 
-        Console.WriteLine("  Receiving via GetFrameStream (one frame at a time):");
+        Console.WriteLine("  Receiving via ReceiveFramesAsync (one frame at a time):");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var collected = new List<WebSocketFrame>();

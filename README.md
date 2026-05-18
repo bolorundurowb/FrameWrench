@@ -132,7 +132,8 @@ using FrameWrench;
 using FrameWrench.Core;
 
 await using var client = new FrameWrenchClient();
-await client.ConnectAsync(new Uri("wss://echo.websocket.org")); // returns ConnectResult in 2.0
+ConnectResult connect = await client.ConnectAsync(new Uri("wss://echo.websocket.org"));
+// connect.SelectedSubProtocol is set when the server picks a subprotocol
 
 // Send a text message
 await client.SendTextAsync("Hello, World!");
@@ -141,7 +142,8 @@ await client.SendTextAsync("Hello, World!");
 var message = await client.ReceiveMessageAsync();
 Console.WriteLine(message.GetText()); // "Hello, World!"
 
-await client.CloseAsync();
+var close = await client.CloseAsync(WireCloseStatus.NormalClosure, "bye");
+// close.HandshakeCompleted, close.FinalState
 ```
 
 
@@ -153,14 +155,17 @@ The main class. Create one per connection.
 
 ```csharp
 var client = new FrameWrenchClient(options);
-// or: new FrameWrenchClient() with defaults
+// or: new FrameWrenchClient() — uses FrameWrenchOptions.Default
 ```
 
 #### Connection
 
 ```csharp
-// Connect (ws:// or wss://)
-await client.ConnectAsync(new Uri("ws://localhost:8080/ws"), cancellationToken);
+// Connect (ws:// or wss://) — returns ConnectResult
+ConnectResult connect = await client.ConnectAsync(
+    new Uri("ws://localhost:8080/ws"),
+    cancellationToken);
+string? subProtocol = connect.SelectedSubProtocol;
 
 // Current state
 WebSocketState state = client.State; // None | Connecting | Open | CloseSent | CloseReceived | Closed | Aborted
@@ -190,12 +195,14 @@ Console.WriteLine(frame.OpCode);    // Text | Binary | Continuation | Ping | Pon
 Console.WriteLine(frame.IsFinal);   // true for the last (or only) fragment
 Console.WriteLine(frame.Payload.Length);
 
-// Stream all frames asynchronously
-await foreach (var f in client.GetFrameStream(ct))
+// Stream all frames asynchronously (preferred)
+await foreach (var f in client.ReceiveFramesAsync(ct))
 {
     Console.WriteLine($"Received: {f}");
     if (f.OpCode == FrameOpCode.Close) break;
 }
+
+// GetFrameStream is obsolete; use ReceiveFramesAsync
 ```
 
 #### Event-Driven Receive
@@ -227,13 +234,13 @@ Console.WriteLine(msg.Frames.Count);    // number of fragments
 
 ```csharp
 // Explicit Ping with payload correlation and RTT measurement
-var (received, roundtrip) = await client.PingAsync(
+PingResult ping = await client.PingAsync(
     payload: new byte[] { 0x01, 0x02, 0x03, 0x04 },
     timeout: TimeSpan.FromSeconds(5),
     ct: cancellationToken);
 
-if (received)
-    Console.WriteLine($"Pong in {roundtrip.TotalMilliseconds:0.0} ms");
+if (ping.PongReceived)
+    Console.WriteLine($"Pong in {ping.Elapsed.TotalMilliseconds:0.0} ms");
 else
     Console.WriteLine("Pong not received within timeout");
 
@@ -243,11 +250,16 @@ await client.SendFrameAsync(WebSocketFrame.Pong(payload));
 
 #### Close
 
+Use `WireCloseStatus` for registered status codes (RFC 6455 §7.4.1). For application-defined codes (3000–4999), build a frame with `WebSocketFrame.Close(4000, reason)` and send it with `SendFrameAsync`, or rely on the library to echo the peer’s code when you receive their Close first.
+
 ```csharp
-await client.CloseAsync(
-    status: WebSocketCloseStatus.NormalClosure,
+CloseResult result = await client.CloseAsync(
+    WireCloseStatus.NormalClosure,
     reason: "done",
     ct: cancellationToken);
+
+// result.HandshakeCompleted — peer echoed Close within CloseHandshakeTimeout
+// result.FinalState
 ```
 
 
@@ -262,9 +274,14 @@ var options = FrameWrenchOptions.Create()
     .WithMaxMessagePayloadBytes(64 * 1024 * 1024)
     .WithPingTimeout(TimeSpan.FromSeconds(10))
     .WithCloseHandshakeTimeout(TimeSpan.FromSeconds(5))
+    .WithFailOnInvalidIncomingUtf8(true)   // default: validate inbound Text/Close UTF-8
+    .WithValidateOutgoingMessages(true)    // default: validate outbound fragmentation/UTF-8
     .Build();
     // TLS: .WithSslProtocols(...), .WithRemoteCertificateValidationCallback(...) for wss://
+    // .WithSingleFrameConsumer(true) — only one ReceiveFramesAsync / ReceiveFrameAsync at a time
 ```
+
+Options are **immutable** after `Build()`. `ExtraHeaders` cannot override reserved handshake headers (`Upgrade`, `Connection`, `Sec-WebSocket-Key`, and others); names and values must not contain CR, LF, or NUL.
 
 
 ## WebSocketFrame
@@ -282,13 +299,19 @@ WebSocketFrame.Continuation(moreBytes, isFinal: true);
 WebSocketFrame.Ping(payload);    // optional payload ≤ 125 bytes
 WebSocketFrame.Pong(payload);
 WebSocketFrame.Close(WireCloseStatus.NormalClosure, "bye");
+WebSocketFrame.Close(4000, "app-specific");  // 3000–4999 application codes
 
 // Reading a Text frame
 var text = frame.GetTextPayload();
 
 // Reading a Close frame
 CloseFrameInfo close = frame.GetCloseInfo();
+// close.StatusCode — raw wire code (always set when payload ≥ 2 bytes)
+// close.Status     — WireCloseStatus when registered; null for 3000–4999
+// close.Reason
 ```
+
+`WebSocketCloseStatus` (e.g. `NoStatusReceived`, `AbnormalClosure`) is for **local** connection state only — never send those values in a Close frame.
 
 
 ## Fragmentation Guide
@@ -317,7 +340,7 @@ await client.SendFrameAsync(FrameOpCode.Continuation,
 ### Receiving fragments at the frame level
 
 ```csharp
-await foreach (var frame in client.GetFrameStream(ct))
+await foreach (var frame in client.ReceiveFramesAsync(ct))
 {
     // Control frames (Ping, Pong) may be interleaved - handle them
     if (frame.IsControl) continue;
@@ -347,11 +370,11 @@ Console.WriteLine(msg.GetText());
 
 ### How correlation works
 
-`PingAsync` generates (or uses your provided) payload, registers a waiter in a FIFO queue keyed by the Base64 representation of that payload, sends the Ping frame, and awaits a `TaskCompletionSource`. The receive pump matches each Pong’s echoed application data to that key and completes the oldest outstanding waiter, so concurrent pings with the same payload still correlate correctly. If no Pong arrives within the timeout, `(false, elapsed)` is returned.
+`PingAsync` generates (or uses your provided) payload, registers a waiter in a FIFO queue keyed by the Base64 representation of that payload, sends the Ping frame, and awaits a `TaskCompletionSource`. The receive pump matches each Pong’s echoed application data to that key and completes the oldest outstanding waiter, so concurrent pings with the same payload still correlate correctly. If no Pong arrives within the timeout, `PingResult.PongReceived` is `false`.
 
 ```csharp
 // The payload is echoed verbatim in the Pong - use it as a correlation key
-var (ok, rtt) = await client.PingAsync(
+PingResult ping = await client.PingAsync(
     payload: Encoding.UTF8.GetBytes("probe-1"),
     timeout: TimeSpan.FromSeconds(5));
 ```
@@ -363,7 +386,7 @@ If you don't use `PingAsync`, you can still send Ping frames and handle Pongs yo
 ```csharp
 await client.SendFrameAsync(WebSocketFrame.Ping(myCorrelationBytes));
 
-await foreach (var frame in client.GetFrameStream(ct))
+await foreach (var frame in client.ReceiveFramesAsync(ct))
 {
     if (frame.OpCode == FrameOpCode.Pong)
     {
@@ -383,12 +406,11 @@ await client.SendFrameAsync(WebSocketFrame.Pong());
 ### Auto-Ping
 
 ```csharp
-var opts = new FrameWrenchOptions
-{
-    AutoPing          = true,
-    KeepAliveInterval = TimeSpan.FromSeconds(20),
-    PingTimeout       = TimeSpan.FromSeconds(8),
-};
+var opts = FrameWrenchOptions.Create()
+    .WithAutoPing(true)
+    .WithKeepAliveInterval(TimeSpan.FromSeconds(20))
+    .WithPingTimeout(TimeSpan.FromSeconds(8))
+    .Build();
 // If the server doesn't respond within PingTimeout, CloseAsync is called automatically.
 ```
 
@@ -398,21 +420,36 @@ var opts = new FrameWrenchOptions
 | Operation               | Notes                                                                                                                                                                                                                                                                                                                                                                                                |
 |-------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Sending frames**      | Concurrent sends are serialised through an internal `SemaphoreSlim`. Multiple threads may call `SendFrameAsync` concurrently; frames are written atomically.                                                                                                                                                                                                                                         |
-| **Receiving frames**    | A single background pump reads frames from the wire. `ReceiveFrameAsync`, `GetFrameStream`, and `ReceiveMessageAsync` all read from an in-memory channel fed by the pump. Multiple concurrent calls to `ReceiveFrameAsync` are allowed but each frame is delivered to exactly one caller. If several tasks call `ReceiveMessageAsync` concurrently, logical message ordering is your responsibility. |
+| **Receiving frames**    | A single background pump reads frames from the wire. `ReceiveFrameAsync`, `ReceiveFramesAsync`, and `ReceiveMessageAsync` read from an in-memory channel fed by the pump. Each frame is delivered to exactly one consumer. Optional `SingleFrameConsumer` rejects a second concurrent `ReceiveFramesAsync` / `ReceiveFrameAsync`. If several tasks call `ReceiveMessageAsync` concurrently, logical message ordering is your responsibility. |
 | **FrameReceived event** | Fires on the pump thread. Keep handlers short and non-blocking.                                                                                                                                                                                                                                                                                                                                      |
 
 
 ## Error Handling
 
-All FrameWrench exceptions derive from `FrameWrenchException`:
+All FrameWrench exceptions derive from `FrameWrenchException` and carry **actionable** detail: a stable `ErrorCode`, plain-language explanation, optional RFC section/URL, diagnostic `Context`, and `help:` suggestions in `Message`.
 
 | Exception                        | When                                                                                                                                                         |
 |----------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `WebSocketHandshakeException`    | HTTP upgrade failed, non-101 status, bad `Sec-WebSocket-Accept`                                                                                              |
-| `WebSocketClosedByPeerException` | Server sent a Close frame read via `ReceiveMessageAsync` (includes `CloseStatus` and `CloseReason`; use `ReceiveFrameAsync` if you need the raw Close frame) |
-| `WebSocketProtocolException`     | RFC 6455 violation: reserved opcode, masked server frame, oversized control frame, fragmented control frame                                                  |
-| `WebSocketStateException`        | Operation attempted in wrong state (e.g., send after close)                                                                                                  |
-| `EndOfStreamException`           | Server closed the TCP connection mid-frame                                                                                                                   |
+| `WebSocketHandshakeException`    | HTTP upgrade failed, non-101 status, bad `Sec-WebSocket-Accept`, subprotocol mismatch                                                                      |
+| `WebSocketClosedByPeerException` | Peer sent Close while you were on `ReceiveMessageAsync` (`CloseInfo` has status/reason; use `ReceiveFramesAsync` for the raw Close frame)                    |
+| `WebSocketProtocolException`     | RFC 6455 violation — filter with `Kind` (`MaskedServerFrame`, `InvalidUtf8`, `Fragmentation`, `InvalidCloseStatus`, …)                                       |
+| `WebSocketStateException`        | Operation invalid for current `State` (e.g. send while closed)                                                                                             |
+| `EndOfStreamException`           | TCP closed mid-frame (not a `FrameWrenchException`)                                                                                                          |
+
+Example message shape:
+
+```text
+error[FW-PROTO-MASKED-SERVER-FRAME]: received a masked frame from the server
+...
+Context:
+  connectionState: Open
+...
+RFC 6455 §5.1 — https://datatracker.ietf.org/doc/html/rfc6455#section-5.1
+help:
+  → Confirm the URL is a WebSocket endpoint (ws/wss), not plain HTTP or raw TCP.
+```
+
+**Redaction:** error context never includes secret header values (`Authorization`, `Cookie`, `Sec-WebSocket-Key`); long strings are truncated.
 
 ```csharp
 try
@@ -421,12 +458,19 @@ try
 }
 catch (WebSocketHandshakeException ex)
 {
-    Console.Error.WriteLine($"Handshake failed: {ex.Message} (status: {ex.StatusLine})");
+    Console.Error.WriteLine($"[{ex.ErrorCode}] {ex.StatusLine}");
+    Console.Error.WriteLine(ex.Message);
+}
+catch (WebSocketClosedByPeerException ex)
+{
+    Console.Error.WriteLine($"[{ex.ErrorCode}] code={ex.CloseInfo.StatusCode} reason={ex.CloseReason}");
 }
 catch (WebSocketProtocolException ex)
 {
     Console.Error.WriteLine($"[{ex.ErrorCode}] {ex.Kind}");
     Console.Error.WriteLine(ex.Message);
+    foreach (var (k, v) in ex.Detail.Context)
+        Console.Error.WriteLine($"  {k}: {v}");
 }
 catch (FrameWrenchException ex)
 {
@@ -435,7 +479,7 @@ catch (FrameWrenchException ex)
 }
 ```
 
-Every `FrameWrenchException` exposes `ErrorCode` and structured `Detail` (context, RFC section, suggestions). See [MIGRATION.md](MIGRATION.md).
+See [MIGRATION.md](MIGRATION.md) for the full 1.x → 2.0 API mapping.
 
 Prefer **`await client.DisposeAsync()`** (or `await using`) over **`Dispose()`** when a `SynchronizationContext` may be present (for example, UI or legacy ASP.NET), because synchronous dispose can block while sending the close frame.
 

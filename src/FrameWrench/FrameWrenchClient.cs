@@ -348,8 +348,8 @@ public sealed class FrameWrenchClient : IDisposable, IAsyncDisposable
     /// </param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>
-    /// <c>(true, roundtrip)</c> if the Pong arrived in time;
-    /// <c>(false, elapsed)</c> on timeout.
+    /// A <see cref="PingResult"/> with <see cref="PingResult.PongReceived"/> and
+    /// <see cref="PingResult.Elapsed"/>.
     /// </returns>
     /// <exception cref="ArgumentException">
     /// Thrown when <paramref name="payload"/> exceeds 125 bytes (RFC 6455 §5.5).
