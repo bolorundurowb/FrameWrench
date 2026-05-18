@@ -19,26 +19,28 @@ internal static class HttpHeaderValidator
     {
         foreach (var kv in headers)
         {
-            ValidateToken(kv.Key, isName: true);
-            ValidateToken(kv.Value, isName: false);
+            ValidateToken(kv.Key, kv.Key, isName: true);
+            ValidateToken(kv.Key, kv.Value, isName: false);
 
             if (ReservedHeaders.Contains(kv.Key))
                 throw FrameWrenchErrors.ReservedHeaderOverride(kv.Key);
         }
     }
 
-    private static void ValidateToken(string value, bool isName)
+    private static void ValidateToken(string headerName, string token, bool isName)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw FrameWrenchErrors.HeaderInjection(
-                isName ? "(empty name)" : "(empty value)",
+        if (string.IsNullOrWhiteSpace(token))
+            throw FrameWrenchErrors.InvalidHeader(
+                isName ? "(empty name)" : headerName,
+                isName,
                 isName ? "Header name cannot be empty." : "Header value cannot be empty.");
 
-        foreach (var ch in value)
+        foreach (var ch in token)
         {
             if (ch is '\r' or '\n' or '\0')
-                throw FrameWrenchErrors.HeaderInjection(
-                    value,
+                throw FrameWrenchErrors.InvalidHeader(
+                    headerName,
+                    isName,
                     "Header names and values must not contain CR, LF, or NUL characters.");
         }
     }

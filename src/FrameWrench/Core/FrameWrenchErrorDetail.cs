@@ -1,3 +1,5 @@
+using FrameWrench.Internal;
+
 namespace FrameWrench.Core;
 
 /// <summary>
@@ -22,9 +24,13 @@ public sealed class FrameWrenchErrorDetail
             throw new ArgumentException("Error title is required.", nameof(title));
 
         Code = code;
-        Title = title;
-        Explanation = explanation ?? string.Empty;
-        Context = context ?? EmptyContext;
+        var sanitized = SensitiveDataRedactor.SanitizeDetailFields(
+            title,
+            explanation ?? string.Empty,
+            context);
+        Title = sanitized.Title;
+        Explanation = sanitized.Explanation;
+        Context = sanitized.Context;
         Suggestions = suggestions ?? Array.Empty<string>();
         RfcSection = rfcSection;
         RfcUrl = rfcUrl;

@@ -1,4 +1,5 @@
 using FrameWrench;
+using FrameWrench.Internal;
 using Shouldly;
 using Xunit;
 
@@ -36,6 +37,35 @@ public class FrameWrenchOptionsTests
             .Build();
 
         options.SubProtocols.ShouldBe(["chat"]);
+    }
+
+    [Fact]
+    public void Build_HeaderInjection_AuthorizationValue_DoesNotLeakSecret()
+    {
+        const string secret = "Bearer secret-token-xyz";
+        var ex = Should.Throw<ArgumentException>(() =>
+            FrameWrenchOptions.Create()
+                .WithExtraHeader("Authorization", secret + "\r\n")
+                .Build());
+
+        ex.Message.ShouldContain("FW-HANDSHAKE-HEADER-INVALID");
+        ex.Message.ShouldContain("Authorization");
+        ex.Message.ShouldNotContain("secret-token");
+        ex.Message.ShouldNotContain(secret);
+    }
+
+    [Fact]
+    public void Build_HeaderInjection_CustomHeader_StillShowsHeaderName_NotPayload()
+    {
+        const string payload = "value\ninjected";
+        var ex = Should.Throw<ArgumentException>(() =>
+            FrameWrenchOptions.Create()
+                .WithExtraHeader("X-Custom", payload)
+                .Build());
+
+        ex.Message.ShouldContain("X-Custom");
+        ex.Message.ShouldNotContain("injected");
+        ex.Message.ShouldContain("invalid HTTP header value");
     }
 
     [Theory]

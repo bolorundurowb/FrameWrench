@@ -11,6 +11,9 @@ internal static class ErrorContext
         return d;
     }
 
+    public static Dictionary<string, string> CreateHeaderContext(string headerName) =>
+        Create(("headerName", headerName));
+
     public static string FormatOpcode(Core.FrameOpCode op) =>
         $"{op} (0x{(byte)op:X1})";
 

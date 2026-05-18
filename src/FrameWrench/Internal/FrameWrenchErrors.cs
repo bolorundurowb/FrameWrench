@@ -331,25 +331,41 @@ internal static class FrameWrenchErrors
             "The TCP stream ended before the HTTP header terminator (CRLF CRLF) was received.",
             operation: "ConnectAsync"));
 
-    public static ArgumentException HeaderInjection(string headerName, string reason) =>
-        new(
+    public static ArgumentException InvalidHeader(string headerName, bool isName, string reason)
+    {
+        var title = isName
+            ? "invalid HTTP header name"
+            : $"invalid HTTP header value for '{headerName}'";
+
+        return new ArgumentException(
             FrameWrenchErrorFormatter.Format(new FrameWrenchErrorDetail(
                 "FW-HANDSHAKE-HEADER-INVALID",
-                $"invalid HTTP header '{headerName}'",
+                title,
                 reason,
-                ErrorContext.Create(("headerName", headerName)),
+                ErrorContext.CreateHeaderContext(headerName),
                 new[]
                 {
                     "Remove CR, LF, and NUL characters from header names and values.",
                     "Do not put Sec-WebSocket-Key, Upgrade, Connection, or Sec-WebSocket-Version in ExtraHeaders.",
                 },
                 operation: "FrameWrenchOptions")),
-            headerName);
+            paramName: "name");
+    }
 
     public static ArgumentException ReservedHeaderOverride(string headerName) =>
-        HeaderInjection(
-            headerName,
-            "This header is set automatically by FrameWrench and cannot be overridden via ExtraHeaders.");
+        new ArgumentException(
+            FrameWrenchErrorFormatter.Format(new FrameWrenchErrorDetail(
+                "FW-HANDSHAKE-HEADER-INVALID",
+                $"cannot override reserved handshake header '{headerName}'",
+                "This header is set automatically by FrameWrench and cannot be overridden via ExtraHeaders.",
+                ErrorContext.CreateHeaderContext(headerName),
+                new[]
+                {
+                    "Remove the header from ExtraHeaders.",
+                    "Use SubProtocols, SslProtocols, or built-in handshake fields instead.",
+                },
+                operation: "FrameWrenchOptions")),
+            paramName: "name");
 
     public static WebSocketStateException InvalidState(
         WebSocketState current,
