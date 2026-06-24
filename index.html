@@ -1,0 +1,1150 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="FrameWrench is a lightweight, client-only RFC 6455 WebSocket library for .NET Framework 4.6.2+, .NET Framework 4.8, and .NET Standard 2.0 with explicit frame-level control, Ping/Pong correlation, fragmentation, and actionable errors.">
+  <title>FrameWrench Documentation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Code:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --purple: #68217A;
+      --purple-deep: #3d1249;
+      --purple-muted: #8f4a9e;
+      --purple-tint: #f3ebf5;
+      --purple-line: #dcc8e2;
+      --blue: #0078D4;
+      --blue-deep: #005a9e;
+      --blue-tint: #e8f4fc;
+      --ink: #1a1520;
+      --muted: #5c5363;
+      --surface: #ffffff;
+      --canvas: #f6f3f7;
+      --grid: rgba(104, 33, 122, 0.06);
+      --code-bg: #1a1520;
+      --code-border: #68217A;
+      --sidebar-w: 17.5rem;
+      --warn: #b45309;
+      --warn-bg: #fff8eb;
+      --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+      --font-code: "Google Sans Code", "Cascadia Code", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background-color: var(--canvas);
+      background-image:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+      background-size: 24px 24px;
+      font-family: var(--font-sans);
+      font-size: 1rem;
+      line-height: 1.7;
+    }
+
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { color: var(--blue-deep); text-decoration: underline; }
+
+    code, pre, kbd, .mono {
+      font-family: var(--font-code);
+      font-feature-settings: "liga" 0;
+    }
+
+    .skip-link {
+      position: absolute;
+      top: -3rem;
+      left: 1rem;
+      z-index: 100;
+      padding: 0.5rem 0.85rem;
+      border: 2px solid var(--purple);
+      background: var(--surface);
+      color: var(--purple-deep);
+      font-weight: 600;
+      transition: top 0.15s;
+    }
+    .skip-link:focus { top: 0.75rem; }
+
+    /* ── Shell ── */
+    .shell {
+      display: grid;
+      grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: 100vh;
+      overflow-y: auto;
+      border-right: 2px solid var(--purple-line);
+      background: var(--surface);
+      padding: 1.5rem 0 2rem;
+    }
+
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0 1.25rem 1.25rem;
+      border-bottom: 2px solid var(--purple-tint);
+      margin-bottom: 1rem;
+      color: var(--ink);
+      font-weight: 700;
+      font-size: 1.05rem;
+      letter-spacing: -0.02em;
+      text-decoration: none;
+    }
+    .sidebar-brand:hover { text-decoration: none; color: var(--purple); }
+    .sidebar-brand img { width: 36px; height: 36px; flex-shrink: 0; }
+
+    .sidebar-label {
+      margin: 0 1.25rem 0.5rem;
+      color: var(--purple-muted);
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .sidebar-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+      padding: 0 0.65rem;
+      list-style: none;
+      margin: 0 0 1.25rem;
+    }
+    .sidebar-nav a {
+      display: block;
+      padding: 0.4rem 0.65rem;
+      border-left: 3px solid transparent;
+      color: var(--muted);
+      font-size: 0.88rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: border-color 0.12s, color 0.12s, background 0.12s;
+    }
+    .sidebar-nav a:hover {
+      color: var(--purple-deep);
+      background: var(--purple-tint);
+      border-left-color: var(--purple);
+      text-decoration: none;
+    }
+
+    .sidebar-meta {
+      margin: 0 1.25rem;
+      padding: 0.85rem;
+      border: 1px solid var(--purple-line);
+      background: var(--purple-tint);
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .sidebar-meta strong {
+      display: block;
+      color: var(--purple-deep);
+      font-size: 0.85rem;
+      margin-bottom: 0.35rem;
+    }
+    .sidebar-meta code {
+      font-size: 0.78rem;
+      color: var(--blue-deep);
+    }
+
+    .sidebar-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 0.75rem;
+      padding: 1rem 1.25rem 0;
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+    .sidebar-links a { color: var(--blue); }
+
+    /* ── Main column ── */
+    .main-col {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Hero banner ── */
+    .banner {
+      border-bottom: 2px solid var(--purple-line);
+      background:
+        linear-gradient(135deg, var(--purple-tint) 0%, var(--blue-tint) 100%);
+      padding: 3rem clamp(1.25rem, 4vw, 3rem) 2.5rem;
+    }
+
+    .banner-tag {
+      display: inline-block;
+      margin: 0 0 1rem;
+      padding: 0.2rem 0.55rem;
+      border: 1px solid var(--purple);
+      background: var(--surface);
+      color: var(--purple-deep);
+      font-family: var(--font-code);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+
+    .banner h1 {
+      margin: 0;
+      max-width: 22ch;
+      color: var(--purple-deep);
+      font-size: clamp(2rem, 5vw, 3.25rem);
+      font-weight: 700;
+      line-height: 1.08;
+      letter-spacing: -0.03em;
+    }
+
+    .banner-lead {
+      max-width: 58ch;
+      margin: 1rem 0 0;
+      color: var(--muted);
+      font-size: 1.1rem;
+    }
+
+    .banner-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      margin-top: 1.75rem;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.6rem 1.1rem;
+      border: 2px solid transparent;
+      font-family: var(--font-sans);
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.12s, border-color 0.12s, color 0.12s;
+    }
+    .btn:hover { text-decoration: none; }
+    .btn-primary {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--blue-deep); border-color: var(--blue-deep); color: #fff; }
+    .btn-outline {
+      background: var(--surface);
+      border-color: var(--purple);
+      color: var(--purple-deep);
+    }
+    .btn-outline:hover { background: var(--purple-tint); color: var(--purple-deep); }
+
+    .banner-specs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0;
+      margin-top: 2rem;
+      border: 2px solid var(--purple-line);
+      background: var(--surface);
+    }
+    .spec-cell {
+      flex: 1 1 8rem;
+      padding: 0.85rem 1rem;
+      border-right: 1px solid var(--purple-line);
+    }
+    .spec-cell:last-child { border-right: 0; }
+    .spec-cell dt {
+      margin: 0;
+      color: var(--purple-muted);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    .spec-cell dd {
+      margin: 0.2rem 0 0;
+      color: var(--purple-deep);
+      font-family: var(--font-code);
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    /* ── Content area ── */
+    .content {
+      flex: 1;
+      padding: 0 clamp(1.25rem, 4vw, 3rem) 4rem;
+      max-width: 52rem;
+    }
+
+    .section {
+      padding-top: 3.5rem;
+      scroll-margin-top: 1.5rem;
+    }
+
+    .section-marker {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      margin: 0 0 0.5rem;
+      color: var(--blue);
+      font-family: var(--font-code);
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .section-marker::before {
+      content: "";
+      display: block;
+      width: 1.5rem;
+      height: 2px;
+      background: var(--blue);
+    }
+
+    h2 {
+      margin: 0 0 1rem;
+      color: var(--purple-deep);
+      font-size: clamp(1.6rem, 3vw, 2.1rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+    }
+
+    h3 {
+      margin: 2rem 0 0.65rem;
+      color: var(--ink);
+      font-size: 1.2rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    h4 {
+      margin: 1.5rem 0 0.5rem;
+      color: var(--purple-deep);
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .section-lead {
+      margin: 0 0 1.5rem;
+      color: var(--muted);
+      font-size: 1.02rem;
+    }
+
+    p { margin: 0 0 1rem; color: var(--muted); }
+
+    /* ── Panels ── */
+    .panel-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+      gap: 0.75rem;
+      margin: 1.25rem 0;
+    }
+    .panel-grid.two { grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); }
+
+    .panel {
+      padding: 1rem 1.1rem;
+      border: 1px solid var(--purple-line);
+      border-top: 3px solid var(--purple);
+      background: var(--surface);
+    }
+    .panel.accent-blue { border-top-color: var(--blue); }
+    .panel h3, .panel h4 {
+      margin: 0 0 0.5rem;
+      font-size: 0.95rem;
+      color: var(--purple-deep);
+    }
+    .panel p { margin: 0; font-size: 0.92rem; }
+
+    /* ── Lists ── */
+    .list { margin: 0.5rem 0 1rem; padding-left: 1.25rem; }
+    .list li { margin: 0.3rem 0; color: var(--muted); }
+
+    /* ── Data tables ── */
+    .data-table {
+      margin: 1rem 0;
+      border: 1px solid var(--purple-line);
+      background: var(--surface);
+      font-size: 0.92rem;
+    }
+    .data-row {
+      display: grid;
+      grid-template-columns: minmax(9rem, 0.38fr) minmax(0, 0.62fr);
+      gap: 1rem;
+      padding: 0.75rem 1rem;
+      border-top: 1px solid var(--purple-line);
+    }
+    .data-row:first-child { border-top: 0; }
+    .data-row:nth-child(even) { background: var(--purple-tint); }
+    .data-row strong {
+      color: var(--purple-deep);
+      font-family: var(--font-code);
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .data-row span { color: var(--muted); }
+
+    .data-table.split .data-row {
+      grid-template-columns: minmax(0, 0.5fr) minmax(0, 0.5fr);
+    }
+
+    /* ── Steps ── */
+    .step-list { display: grid; gap: 0.75rem; margin: 1rem 0; }
+
+    .step-item {
+      padding: 1rem 1.1rem 1rem 3.25rem;
+      border: 1px solid var(--purple-line);
+      border-left: 4px solid var(--blue);
+      background: var(--surface);
+      position: relative;
+    }
+    .step-item::before {
+      position: absolute;
+      left: 1rem;
+      top: 1rem;
+      color: var(--blue);
+      font-family: var(--font-code);
+      font-size: 0.8rem;
+      font-weight: 700;
+      content: attr(data-step);
+    }
+    .step-item h3 { margin: 0 0 0.5rem; font-size: 1rem; }
+
+    /* ── Code blocks ── */
+    pre {
+      margin: 1rem 0;
+      padding: 1rem 1.15rem;
+      overflow-x: auto;
+      border: 1px solid var(--code-border);
+      border-left: 4px solid var(--blue);
+      background: var(--code-bg);
+      color: #e8e4ec;
+      font-family: var(--font-code);
+      font-size: 0.84rem;
+      line-height: 1.65;
+      tab-size: 2;
+    }
+    pre code {
+      font-family: inherit;
+      font-size: inherit;
+      background: none;
+      border: 0;
+      padding: 0;
+      color: inherit;
+    }
+
+    :not(pre) > code {
+      padding: 0.12rem 0.35rem;
+      border: 1px solid var(--purple-line);
+      background: var(--purple-tint);
+      color: var(--purple-deep);
+      font-size: 0.86em;
+      font-weight: 500;
+    }
+
+    .terminal {
+      margin: 1rem 0;
+      padding: 0.85rem 1rem;
+      border: 1px solid var(--purple-line);
+      border-left: 4px solid var(--purple);
+      background: var(--code-bg);
+      color: #c8bfd0;
+      font-family: var(--font-code);
+      font-size: 0.86rem;
+      overflow-x: auto;
+    }
+    .terminal .prompt { color: var(--blue); user-select: none; }
+
+    /* ── Callouts ── */
+    .note, .warn {
+      margin: 1.25rem 0;
+      padding: 0.85rem 1rem;
+      border: 1px solid;
+      font-size: 0.94rem;
+    }
+    .note {
+      border-color: var(--blue);
+      border-left-width: 4px;
+      background: var(--blue-tint);
+      color: var(--muted);
+    }
+    .warn {
+      border-color: var(--warn);
+      border-left-width: 4px;
+      background: var(--warn-bg);
+      color: var(--muted);
+    }
+    .note strong, .warn strong { color: var(--ink); }
+
+    /* ── FAQ ── */
+    .faq { display: grid; gap: 0.5rem; margin-top: 1rem; }
+
+    details {
+      border: 1px solid var(--purple-line);
+      background: var(--surface);
+    }
+    summary {
+      cursor: pointer;
+      padding: 0.85rem 1rem;
+      color: var(--purple-deep);
+      font-weight: 600;
+      font-size: 0.95rem;
+      list-style: none;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::before {
+      content: "+ ";
+      color: var(--blue);
+      font-family: var(--font-code);
+      font-weight: 700;
+    }
+    details[open] summary::before { content: "− "; }
+    details p {
+      margin: 0;
+      padding: 0 1rem 0.85rem;
+      border-top: 1px solid var(--purple-line);
+      padding-top: 0.75rem;
+    }
+
+    /* ── API cards in reference ── */
+    .api-block {
+      margin: 1rem 0;
+      padding: 1rem 1.1rem;
+      border: 1px solid var(--purple-line);
+      background: var(--surface);
+    }
+    .api-block h4 { margin-top: 0; }
+    .method-list {
+      margin: 0.5rem 0 0;
+      padding-left: 1.2rem;
+      font-size: 0.9rem;
+    }
+    .method-list li { margin: 0.25rem 0; color: var(--muted); }
+
+    /* ── Footer ── */
+    .site-footer {
+      border-top: 2px solid var(--purple-line);
+      background: var(--surface);
+      padding: 1.25rem clamp(1.25rem, 4vw, 3rem);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 0.75rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .site-footer a { font-weight: 600; }
+
+    /* ── Mobile ── */
+    @media (max-width: 900px) {
+      .shell { grid-template-columns: 1fr; }
+
+      .sidebar {
+        position: relative;
+        height: auto;
+        border-right: 0;
+        border-bottom: 2px solid var(--purple-line);
+        padding-bottom: 1rem;
+      }
+
+      .sidebar-nav {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+      .sidebar-nav a {
+        border-left: 0;
+        border-bottom: 2px solid transparent;
+        padding: 0.35rem 0.55rem;
+        font-size: 0.82rem;
+      }
+      .sidebar-nav a:hover { border-bottom-color: var(--purple); }
+
+      .sidebar-meta { display: none; }
+
+      .banner-specs { flex-direction: column; }
+      .spec-cell { border-right: 0; border-bottom: 1px solid var(--purple-line); }
+      .spec-cell:last-child { border-bottom: 0; }
+
+      .data-row { grid-template-columns: 1fr; gap: 0.25rem; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <div class="shell">
+    <aside class="sidebar" aria-label="Documentation navigation">
+      <a class="sidebar-brand" href="#top">
+        <img src="assets/frame-wrench-logo.svg" alt="">
+        <span>FrameWrench</span>
+      </a>
+
+      <p class="sidebar-label">On this page</p>
+      <nav>
+        <ul class="sidebar-nav">
+          <li><a href="#overview">Overview</a></li>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#prerequisites">Prerequisites</a></li>
+          <li><a href="#installation">Installation</a></li>
+          <li><a href="#quick-start">Quick start</a></li>
+          <li><a href="#api-reference">API reference</a></li>
+          <li><a href="#guides">Guides</a></li>
+          <li><a href="#errors">Error handling</a></li>
+          <li><a href="#migration">Migration</a></li>
+          <li><a href="#faq">FAQ</a></li>
+          <li><a href="#contributing">Contributing</a></li>
+        </ul>
+      </nav>
+
+      <div class="sidebar-meta">
+        <strong>FrameWrench 2.0.0</strong>
+        Install via NuGet:<br>
+        <code>dotnet add package FrameWrench</code>
+      </div>
+
+      <div class="sidebar-links">
+        <a href="https://github.com/bolorundurowb/FrameWrench">GitHub</a>
+        <a href="https://www.nuget.org/packages/FrameWrench">NuGet</a>
+      </div>
+    </aside>
+
+    <div class="main-col">
+      <header class="banner" id="top">
+        <p class="banner-tag">RFC 6455 · client-only · net462+</p>
+        <h1>Frame-level WebSocket control for legacy .NET</h1>
+        <p class="banner-lead">
+          A lightweight WebSocket client with explicit frame access, Ping/Pong correlation, fragmentation control,
+          and actionable protocol errors — for .NET Framework 4.6.2+, 4.8, and .NET Standard 2.0.
+        </p>
+        <div class="banner-actions">
+          <a class="btn btn-primary" href="#installation">Install</a>
+          <a class="btn btn-outline" href="#quick-start">Quick start</a>
+        </div>
+        <dl class="banner-specs">
+          <div class="spec-cell">
+            <dt>Protocol</dt>
+            <dd>RFC 6455</dd>
+          </div>
+          <div class="spec-cell">
+            <dt>Targets</dt>
+            <dd>net462 · net48 · netstandard2.0</dd>
+          </div>
+          <div class="spec-cell">
+            <dt>Licence</dt>
+            <dd>MIT</dd>
+          </div>
+        </dl>
+      </header>
+
+      <main class="content" id="main">
+        <section class="section" id="overview">
+          <p class="section-marker">#overview</p>
+          <h2>Why FrameWrench exists</h2>
+          <p class="section-lead">
+            Built-in <code>ClientWebSocket</code> hides the frame layer. For legacy .NET applications that need explicit
+            Ping/Pong, fragmentation control, or a frame event model, FrameWrench fills a gap no maintained open-source
+            client currently covers for pre-.NET 6 targets.
+          </p>
+
+          <div class="panel-grid">
+            <article class="panel">
+              <h3>Frame-level API</h3>
+              <p>Send and receive every opcode — Text, Binary, Continuation, Ping, Pong, and Close — with explicit FIN and fragmentation control.</p>
+            </article>
+            <article class="panel accent-blue">
+              <h3>Ping/Pong correlation</h3>
+              <p><code>PingAsync</code> registers a FIFO waiter keyed by payload, measures RTT, and handles concurrent pings with identical payloads.</p>
+            </article>
+            <article class="panel">
+              <h3>Actionable errors</h3>
+              <p>Stable <code>ErrorCode</code>, RFC links, diagnostic context, and <code>help:</code> suggestions on every failure.</p>
+            </article>
+            <article class="panel accent-blue">
+              <h3>Message-level convenience</h3>
+              <p><code>SendTextAsync</code>, <code>SendBinaryAsync</code>, and <code>ReceiveMessageAsync</code> when you do not need per-frame handling.</p>
+            </article>
+            <article class="panel">
+              <h3>Strict RFC validation</h3>
+              <p>Masked server frames, invalid UTF-8, bad Close codes, and fragmentation violations reported via <code>ProtocolViolationKind</code>.</p>
+            </article>
+            <article class="panel accent-blue">
+              <h3>Logger-agnostic</h3>
+              <p>No <code>ILogger</code> dependency. Wire logging through <code>FrameReceived</code>, exceptions, or your own wrappers.</p>
+            </article>
+          </div>
+
+          <h3>Who needs FrameWrench?</h3>
+          <ul class="list">
+            <li>Legacy .NET Framework 4.6.2/4.8 apps requiring frame-level WebSocket control</li>
+            <li>Real-time latency measurement via explicit Ping/Pong with correlation</li>
+            <li>Custom message fragmentation (proprietary streaming protocols on top of WebSockets)</li>
+            <li>Low-level protocol work — trading systems, game clients, telemetry pipelines</li>
+          </ul>
+
+          <h3>Who does not need it?</h3>
+          <ul class="list">
+            <li><strong>Modern .NET 6+</strong> — use built-in <code>ClientWebSocket</code> or SignalR/gRPC</li>
+            <li><strong>Message-only apps</strong> — higher-level libraries are simpler</li>
+            <li><strong>Compression extensions</strong> — FrameWrench is a core client with no extension negotiation</li>
+            <li><strong>Server implementations</strong> — this library is client-only</li>
+          </ul>
+
+          <div class="warn">
+            <strong>AI disclosure:</strong> FrameWrench was developed with generative AI assistance. All code, architecture
+            decisions, and documentation were reviewed as part of the development process.
+          </div>
+
+          <div class="note">
+            <strong>Upgrading from 1.x?</strong> Version 2.0 introduces immutable options, result types, and
+            <code>WireCloseStatus</code>. See the <a href="#migration">migration guide</a>.
+          </div>
+        </section>
+
+        <section class="section" id="features">
+          <p class="section-marker">#features</p>
+          <h2>Capability reference</h2>
+          <p class="section-lead">FrameWrench targets the RFC 6455 core protocol without extensions.</p>
+
+          <div class="data-table" aria-label="FrameWrench feature list">
+            <div class="data-row"><strong>Frame-level API</strong><span>Send and receive individual frames for all opcodes</span></div>
+            <div class="data-row"><strong>Explicit Ping/Pong</strong><span><code>PingAsync</code> with payload correlation and RTT measurement</span></div>
+            <div class="data-row"><strong>Fragmented messages</strong><span>Send multi-frame messages; receive as individual frames or reassembled</span></div>
+            <div class="data-row"><strong>Message-level API</strong><span><code>ReceiveMessageAsync</code> / <code>SendTextAsync</code> / <code>SendBinaryAsync</code></span></div>
+            <div class="data-row"><strong>Async event model</strong><span><code>FrameReceived</code> fires for every incoming frame on the receive pump thread</span></div>
+            <div class="data-row"><strong>Async streaming</strong><span><code>ReceiveFramesAsync()</code> returns <code>IAsyncEnumerable&lt;WebSocketFrame&gt;</code></span></div>
+            <div class="data-row"><strong>TLS support</strong><span>Full <code>wss://</code> with configurable <code>SslProtocols</code> and cert validation callback</span></div>
+            <div class="data-row"><strong>Auto-Ping</strong><span>Opt-in keepalive via <code>FrameWrenchOptions.AutoPing</code></span></div>
+            <div class="data-row"><strong>Zero WS deps</strong><span>Only Microsoft BCL shims; per-target package references</span></div>
+            <div class="data-row"><strong>Target frameworks</strong><span><code>net462</code>, <code>net48</code>, <code>netstandard2.0</code></span></div>
+          </div>
+        </section>
+
+        <section class="section" id="prerequisites">
+          <p class="section-marker">#prerequisites</p>
+          <h2>What you need before installing</h2>
+
+          <div class="panel-grid two">
+            <article class="panel">
+              <h3>For package consumers</h3>
+              <ul class="list">
+                <li>Project targeting <code>net462</code>, <code>net48</code>, or <code>netstandard2.0</code></li>
+                <li>.NET Framework 4.6.2+ or .NET Core 2.x / .NET 5+ runtime (for netstandard2.0)</li>
+                <li>NuGet access and a WebSocket endpoint (<code>ws://</code> or <code>wss://</code>)</li>
+              </ul>
+            </article>
+            <article class="panel accent-blue">
+              <h3>For contributors</h3>
+              <ul class="list">
+                <li>.NET SDK 10 or later (repo pins C# 13)</li>
+                <li>.NET Framework 4.6.2 and 4.8 targeting packs on Windows</li>
+                <li>Visual Studio 2022 17.10+ or JetBrains Rider for <code>.slnx</code> support</li>
+              </ul>
+            </article>
+          </div>
+
+          <h3>Target framework compatibility</h3>
+          <div class="data-table">
+            <div class="data-row"><strong>net462</strong><span>.NET Framework 4.6.2 on Windows</span></div>
+            <div class="data-row"><strong>net48</strong><span>.NET Framework 4.8 on Windows</span></div>
+            <div class="data-row"><strong>netstandard2.0</strong><span>.NET Core 2.x, 3.x, .NET 5, 6, 7, 8+</span></div>
+          </div>
+        </section>
+
+        <section class="section" id="installation">
+          <p class="section-marker">#installation</p>
+          <h2>Install FrameWrench</h2>
+          <p class="section-lead">Use one <code>FrameWrenchClient</code> per WebSocket connection.</p>
+
+          <div class="step-list">
+            <article class="step-item" data-step="01">
+              <h3>Add the NuGet package</h3>
+              <div class="terminal"><span class="prompt">$ </span>dotnet add package FrameWrench</div>
+              <p>Pin a version when needed:</p>
+              <div class="terminal"><span class="prompt">$ </span>dotnet add package FrameWrench --version 2.0.0</div>
+            </article>
+            <article class="step-item" data-step="02">
+              <h3>Add the package reference manually</h3>
+              <pre><code>&lt;ItemGroup&gt;
+  &lt;PackageReference Include="FrameWrench" Version="2.0.0" /&gt;
+&lt;/ItemGroup&gt;</code></pre>
+            </article>
+            <article class="step-item" data-step="03">
+              <h3>Import the namespaces</h3>
+              <pre><code>using FrameWrench;
+using FrameWrench.Core;</code></pre>
+            </article>
+            <article class="step-item" data-step="04">
+              <h3>From source (contributors)</h3>
+              <pre><code>&lt;ProjectReference Include="../path/to/FrameWrench/src/FrameWrench/FrameWrench.csproj" /&gt;</code></pre>
+              <div class="terminal"><span class="prompt">$ </span>cd src/FrameWrench &amp;&amp; dotnet pack -c Release</div>
+            </article>
+          </div>
+        </section>
+
+        <section class="section" id="quick-start">
+          <p class="section-marker">#quick-start</p>
+          <h2>Your first WebSocket connection</h2>
+          <p class="section-lead">Connect, send a text message, receive the echo, and close cleanly.</p>
+
+          <pre><code>using FrameWrench;
+using FrameWrench.Core;
+
+await using var client = new FrameWrenchClient();
+ConnectResult connect = await client.ConnectAsync(new Uri("wss://echo.websocket.org"));
+
+await client.SendTextAsync("Hello, World!");
+
+WebSocketMessage message = await client.ReceiveMessageAsync();
+Console.WriteLine(message.GetText()); // "Hello, World!"
+
+CloseResult close = await client.CloseAsync(WireCloseStatus.NormalClosure, "bye");</code></pre>
+
+          <div class="note">
+            <strong>Connection lifecycle:</strong> After a close, create a new <code>FrameWrenchClient</code> to reconnect.
+            Unlike <code>HttpClient</code>, instances are not pooled for reuse.
+          </div>
+        </section>
+
+        <section class="section" id="api-reference">
+          <p class="section-marker">#api-reference</p>
+          <h2><code>FrameWrenchClient</code></h2>
+          <p class="section-lead">Construct with <code>new FrameWrenchClient()</code> for defaults or pass <code>FrameWrenchOptions</code>.</p>
+
+          <div class="api-block">
+            <h4>Connection</h4>
+            <pre><code>ConnectResult connect = await client.ConnectAsync(
+    new Uri("wss://localhost:8080/ws"),
+    cancellationToken);
+
+WebSocketState state = client.State;
+// None | Connecting | Open | CloseSent | CloseReceived | Closed | Aborted</code></pre>
+            <ul class="method-list">
+              <li><code>ConnectAsync(Uri, CancellationToken)</code> → <code>ConnectResult.SelectedSubProtocol</code></li>
+              <li><code>State</code> — current <code>WebSocketState</code></li>
+            </ul>
+          </div>
+
+          <div class="api-block">
+            <h4>Frame-level send</h4>
+            <pre><code>await client.SendFrameAsync(FrameOpCode.Text, payload, isFinal: true);
+await client.SendFrameAsync(FrameOpCode.Binary, payload, isFinal: true);
+
+var frame = WebSocketFrame.Binary(data, isFinal: false);
+await client.SendFrameAsync(frame);
+
+await client.SendFrameAsync(FrameOpCode.Continuation, moreData, isFinal: true);</code></pre>
+          </div>
+
+          <div class="api-block">
+            <h4>Frame-level receive</h4>
+            <pre><code>WebSocketFrame frame = await client.ReceiveFrameAsync(ct);
+
+await foreach (var f in client.ReceiveFramesAsync(ct))
+{
+    Console.WriteLine(f.OpCode);
+    if (f.OpCode == FrameOpCode.Close) break;
+}</code></pre>
+            <ul class="method-list">
+              <li><code>ReceiveFramesAsync</code> is preferred over obsolete <code>GetFrameStream</code></li>
+            </ul>
+          </div>
+
+          <div class="api-block">
+            <h4>Event-driven receive</h4>
+            <pre><code>client.FrameReceived += (sender, frame) =&gt;
+{
+    Console.WriteLine($"[event] {frame.OpCode} len={frame.Payload.Length}");
+};</code></pre>
+            <p>Fires on the receive-pump thread. Keep handlers short and non-blocking.</p>
+          </div>
+
+          <div class="api-block">
+            <h4>Message-level API</h4>
+            <pre><code>await client.SendTextAsync("hello");
+await client.SendBinaryAsync(bytes);
+
+WebSocketMessage msg = await client.ReceiveMessageAsync(ct);
+Console.WriteLine(msg.GetText());</code></pre>
+          </div>
+
+          <div class="api-block">
+            <h4>Ping / Pong</h4>
+            <pre><code>PingResult ping = await client.PingAsync(
+    payload: new byte[] { 0x01, 0x02, 0x03, 0x04 },
+    timeout: TimeSpan.FromSeconds(5),
+    ct: cancellationToken);
+
+if (ping.PongReceived)
+    Console.WriteLine($"Pong in {ping.Elapsed.TotalMilliseconds:0.0} ms");</code></pre>
+          </div>
+
+          <div class="api-block">
+            <h4>Close</h4>
+            <pre><code>CloseResult result = await client.CloseAsync(
+    WireCloseStatus.NormalClosure,
+    reason: "done",
+    ct: cancellationToken);</code></pre>
+            <p>For application codes (3000–4999), use <code>WebSocketFrame.Close(4000, reason)</code> with <code>SendFrameAsync</code>.</p>
+          </div>
+
+          <h3><code>WebSocketFrame</code></h3>
+          <pre><code>WebSocketFrame.Text("hello");
+WebSocketFrame.Text("chunk", isFinal: false);
+WebSocketFrame.Binary(bytes);
+WebSocketFrame.Continuation(moreBytes, isFinal: true);
+
+WebSocketFrame.Ping(payload);
+WebSocketFrame.Pong(payload);
+WebSocketFrame.Close(WireCloseStatus.NormalClosure, "bye");
+WebSocketFrame.Close(4000, "app-specific");
+
+CloseFrameInfo close = frame.GetCloseInfo();</code></pre>
+
+          <div class="note">
+            <strong>Close status types:</strong> <code>WireCloseStatus</code> is for codes on the wire.
+            <code>WebSocketCloseStatus</code> is for <em>local</em> state only — never send pseudo-codes like 1005 or 1006.
+          </div>
+
+          <h3><code>FrameWrenchOptions</code></h3>
+          <pre><code>var options = FrameWrenchOptions.Create()
+    .WithConnectTimeout(TimeSpan.FromSeconds(30))
+    .WithExtraHeader("Authorization", "Bearer ...")
+    .WithSubProtocol("chat")
+    .WithMaxFramePayloadBytes(64 * 1024 * 1024)
+    .WithMaxMessagePayloadBytes(64 * 1024 * 1024)
+    .WithPingTimeout(TimeSpan.FromSeconds(10))
+    .WithCloseHandshakeTimeout(TimeSpan.FromSeconds(5))
+    .WithFailOnInvalidIncomingUtf8(true)
+    .WithValidateOutgoingMessages(true)
+    .WithAutoPing(true)
+    .WithKeepAliveInterval(TimeSpan.FromSeconds(20))
+    .WithSslProtocols(SslProtocols.Tls12)
+    .WithSingleFrameConsumer(true)
+    .Build();</code></pre>
+
+          <div class="data-table">
+            <div class="data-row"><strong>ConnectTimeout</strong><span>Default 30s — TCP connect and HTTP Upgrade</span></div>
+            <div class="data-row"><strong>ExtraHeaders</strong><span>Custom handshake headers; cannot override reserved WebSocket headers</span></div>
+            <div class="data-row"><strong>SubProtocols</strong><span>Offered <code>Sec-WebSocket-Protocol</code> values</span></div>
+            <div class="data-row"><strong>MaxFramePayloadBytes</strong><span>Per-frame limit (default 64 MiB)</span></div>
+            <div class="data-row"><strong>MaxMessagePayloadBytes</strong><span>Reassembled message limit (default 64 MiB)</span></div>
+            <div class="data-row"><strong>AutoPing</strong><span>Opt-in keepalive; closes if Pong not received within <code>PingTimeout</code></span></div>
+            <div class="data-row"><strong>ValidateOutgoingMessages</strong><span>Outbound fragmentation and UTF-8 validation (default true)</span></div>
+            <div class="data-row"><strong>FailOnInvalidIncomingUtf8</strong><span>Abort on invalid inbound Text/Close UTF-8 (default true)</span></div>
+            <div class="data-row"><strong>SingleFrameConsumer</strong><span>Reject a second concurrent receive stream</span></div>
+          </div>
+
+          <div class="note">Options are <strong>immutable</strong> after <code>Build()</code>. Header names and values must not contain CR, LF, or NUL.</div>
+        </section>
+
+        <section class="section" id="guides">
+          <p class="section-marker">#guides</p>
+          <h2>Fragmentation, Ping/Pong, and threading</h2>
+
+          <h3>Fragmentation (RFC 6455 §5.4)</h3>
+          <h4>Sending a fragmented message</h4>
+          <pre><code>await client.SendFrameAsync(FrameOpCode.Text,
+    Encoding.UTF8.GetBytes("Part one "),
+    isFinal: false);
+
+await client.SendFrameAsync(FrameOpCode.Continuation,
+    Encoding.UTF8.GetBytes("Part two "),
+    isFinal: false);
+
+await client.SendFrameAsync(FrameOpCode.Continuation,
+    Encoding.UTF8.GetBytes("Part three."),
+    isFinal: true);</code></pre>
+
+          <h4>Receiving at the frame level</h4>
+          <pre><code>var buffer = new List&lt;byte&gt;();
+
+await foreach (var frame in client.ReceiveFramesAsync(ct))
+{
+    if (frame.IsControl) continue;
+    buffer.AddRange(frame.Payload.ToArray());
+    if (frame.IsFinal)
+    {
+        var fullText = Encoding.UTF8.GetString(buffer.ToArray());
+        buffer.Clear();
+    }
+}</code></pre>
+
+          <h3>Ping/Pong correlation</h3>
+          <p><code>PingAsync</code> registers a FIFO waiter keyed by payload Base64, sends Ping, and completes when a matching Pong arrives.</p>
+          <pre><code>PingResult ping = await client.PingAsync(
+    payload: Encoding.UTF8.GetBytes("probe-1"),
+    timeout: TimeSpan.FromSeconds(5));</code></pre>
+
+          <h4>Auto-Ping keepalive</h4>
+          <pre><code>var opts = FrameWrenchOptions.Create()
+    .WithAutoPing(true)
+    .WithKeepAliveInterval(TimeSpan.FromSeconds(20))
+    .WithPingTimeout(TimeSpan.FromSeconds(8))
+    .Build();</code></pre>
+
+          <h3>Thread safety</h3>
+          <div class="data-table">
+            <div class="data-row"><strong>Sending</strong><span>Concurrent sends serialised via <code>SemaphoreSlim</code></span></div>
+            <div class="data-row"><strong>Receiving</strong><span>Single pump feeds a channel; each frame delivered to one consumer</span></div>
+            <div class="data-row"><strong>FrameReceived</strong><span>Fires on pump thread — keep handlers non-blocking</span></div>
+            <div class="data-row"><strong>ReceiveMessageAsync</strong><span>Concurrent callers must coordinate message ordering</span></div>
+          </div>
+
+          <div class="note">Prefer <code>await client.DisposeAsync()</code> over <code>Dispose()</code> when a <code>SynchronizationContext</code> may be present.</div>
+        </section>
+
+        <section class="section" id="errors">
+          <p class="section-marker">#errors</p>
+          <h2>Actionable exceptions</h2>
+          <p class="section-lead">All library exceptions derive from <code>FrameWrenchException</code>.</p>
+
+          <div class="data-table">
+            <div class="data-row"><strong>WebSocketHandshakeException</strong><span>HTTP upgrade failed, non-101 status, bad accept, subprotocol mismatch</span></div>
+            <div class="data-row"><strong>WebSocketClosedByPeerException</strong><span>Peer Close during <code>ReceiveMessageAsync</code></span></div>
+            <div class="data-row"><strong>WebSocketProtocolException</strong><span>RFC violation — filter with <code>ProtocolViolationKind</code></span></div>
+            <div class="data-row"><strong>WebSocketStateException</strong><span>Operation invalid for current <code>State</code></span></div>
+            <div class="data-row"><strong>EndOfStreamException</strong><span>TCP closed mid-frame (not a <code>FrameWrenchException</code>)</span></div>
+          </div>
+
+          <h3><code>ProtocolViolationKind</code></h3>
+          <ul class="list">
+            <li><code>MaskedServerFrame</code>, <code>NonZeroRsv</code>, <code>ReservedOpcode</code></li>
+            <li><code>FragmentedControlFrame</code>, <code>ControlPayloadTooLarge</code>, <code>PayloadLimit</code></li>
+            <li><code>Fragmentation</code>, <code>InvalidUtf8</code>, <code>InvalidCloseStatus</code>, <code>InvalidClosePayload</code></li>
+          </ul>
+
+          <h3>Example error shape</h3>
+          <pre><code>error[FW-PROTO-MASKED-SERVER-FRAME]: received a masked frame from the server
+...
+RFC 6455 §5.1 — https://datatracker.ietf.org/doc/html/rfc6455#section-5.1
+help:
+  → Confirm the URL is a WebSocket endpoint (ws/wss).</code></pre>
+
+          <h3>Catching exceptions</h3>
+          <pre><code>try
+{
+    await client.ConnectAsync(uri, ct);
+}
+catch (WebSocketHandshakeException ex)
+{
+    Console.Error.WriteLine($"[{ex.ErrorCode}] {ex.StatusLine}");
+}
+catch (WebSocketProtocolException ex)
+{
+    Console.Error.WriteLine($"[{ex.ErrorCode}] {ex.Kind}");
+}
+catch (FrameWrenchException ex)
+{
+    Console.Error.WriteLine($"[{ex.ErrorCode}]");
+    Console.Error.WriteLine(ex.Message);
+}</code></pre>
+
+          <div class="note"><strong>Redaction:</strong> error context never includes <code>Authorization</code>, <code>Cookie</code>, or <code>Sec-WebSocket-Key</code>.</div>
+        </section>
+
+        <section class="section" id="migration">
+          <p class="section-marker">#migration</p>
+          <h2>Upgrading from 1.x to 2.0</h2>
+
+          <h3>Immutable options</h3>
+          <pre><code>// Before (1.x)
+var options = new FrameWrenchOptions { ConnectTimeout = TimeSpan.FromSeconds(15) };
+
+// After (2.0)
+var options = FrameWrenchOptions.Create()
+    .WithConnectTimeout(TimeSpan.FromSeconds(15))
+    .Build();</code></pre>
+
+          <h3>Result types</h3>
+          <div class="data-table split">
+            <div class="data-row"><strong>1.x</strong><span><strong>2.0</strong></span></div>
+            <div class="data-row"><strong>ConnectAsync(uri)</strong><span><code>ConnectResult.SelectedSubProtocol</code></span></div>
+            <div class="data-row"><strong>(bool, TimeSpan) from PingAsync</strong><span><code>PingResult.PongReceived</code>, <code>Elapsed</code></span></div>
+            <div class="data-row"><strong>CloseAsync then State</strong><span><code>CloseResult.HandshakeCompleted</code>, <code>FinalState</code></span></div>
+          </div>
+
+          <h3>Close status codes</h3>
+          <pre><code>// Before: WebSocketFrame.Close(WebSocketCloseStatus.NormalClosure, "bye");
+// After:  WebSocketFrame.Close(WireCloseStatus.NormalClosure, "bye");
+
+CloseFrameInfo info = frame.GetCloseInfo();</code></pre>
+
+          <h3>Behavioral changes</h3>
+          <ul class="list">
+            <li>Invalid inbound Close status codes abort the connection (RFC §7.4.1)</li>
+            <li>Decoder protocol errors complete the frame channel as <code>WebSocketProtocolException</code></li>
+            <li><code>ExtraHeaders</code> cannot override reserved handshake headers</li>
+          </ul>
+        </section>
+
+        <section class="section" id="faq">
+          <p class="section-marker">#faq</p>
+          <h2>Frequently asked questions</h2>
+
+          <div class="faq">
+            <details>
+              <summary>How is FrameWrench different from <code>ClientWebSocket</code>?</summary>
+              <p><code>ClientWebSocket</code> exposes reassembled messages only. FrameWrench treats individual frames as first-class — Ping/Pong, fragmentation, and <code>FrameReceived</code> for every opcode.</p>
+            </details>
+            <details>
+              <summary>Can I reuse a client after disconnect?</summary>
+              <p>No. Create a new <code>FrameWrenchClient</code> for each connection.</p>
+            </details>
+            <details>
+              <summary>Does FrameWrench support permessage-deflate?</summary>
+              <p>No. It implements RFC 6455 core without extension negotiation.</p>
+            </details>
+            <details>
+              <summary>Can I use it on .NET 8+?</summary>
+              <p>Yes via <code>netstandard2.0</code>. Modern apps without frame-level needs should prefer built-in <code>ClientWebSocket</code>.</p>
+            </details>
+            <details>
+              <summary>Can multiple threads send frames concurrently?</summary>
+              <p>Yes. Sends are serialised internally. Receives should follow single-consumer patterns.</p>
+            </details>
+            <details>
+              <summary>What close code for application errors?</summary>
+              <p>Registered codes use <code>WireCloseStatus</code>. Application codes (3000–4999) via <code>WebSocketFrame.Close(4000, "reason")</code>.</p>
+            </details>
+          </div>
+        </section>
+
+        <section class="section" id="contributing">
+          <p class="section-marker">#contributing</p>
+          <h2>Contributing and support</h2>
+
+          <div class="panel-grid two">
+            <article class="panel">
+              <h3>Report issues</h3>
+              <p>Include version, target framework, server details, and a minimal reproduction.</p>
+              <p><a href="https://github.com/bolorundurowb/FrameWrench/issues">Open an issue on GitHub</a></p>
+            </article>
+            <article class="panel accent-blue">
+              <h3>Submit changes</h3>
+              <p>Fork, add tests for protocol behaviour, ensure <code>dotnet test</code> passes, open a PR.</p>
+              <div class="terminal"><span class="prompt">$ </span>dotnet test src/FrameWrench.slnx</div>
+            </article>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <span>FrameWrench documentation · v2.0.0</span>
+        <span>
+          <a href="https://github.com/bolorundurowb/FrameWrench">GitHub</a>
+          ·
+          <a href="https://www.nuget.org/packages/FrameWrench">NuGet</a>
+          ·
+          <a href="https://github.com/bolorundurowb/FrameWrench/blob/master/LICENSE">MIT</a>
+        </span>
+      </footer>
+    </div>
+  </div>
+</body>
+</html>
